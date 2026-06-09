@@ -239,7 +239,6 @@ function StaffView({ empId }: { empId: string }) {
 
   return (
     <div className="flex flex-col h-full overflow-auto">
-      <PageHeader title="오버타임 등록" />
       <div className="p-6 space-y-5">
         {/* Balance */}
         <div className="grid grid-cols-3 gap-4">
