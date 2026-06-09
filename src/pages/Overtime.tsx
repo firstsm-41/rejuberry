@@ -26,6 +26,7 @@ function ManagerView({ selEmpDefault }: { selEmpDefault: string }) {
   const [entries, setEntries] = useState<OvertimeEntry[]>([])
   const [selEmpId, setSelEmpId] = useState('')
   const [addModal, setAddModal] = useState(false)
+  const [detailModal, setDetailModal] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
@@ -48,13 +49,16 @@ function ManagerView({ selEmpDefault }: { selEmpDefault: string }) {
     return { earned, used, remain: earned - used }
   }
 
-  const selEmp = employees.find(e => e.id === selEmpId)
-  const selEntries = selEmpId ? entries.filter(e => e.employee_id === selEmpId) : []
-
   const totalEarned = entries.filter(e => e.type === 'earn').reduce((s, e) => s + e.hours, 0)
   const totalUsed   = entries.filter(e => e.type === 'use').reduce((s, e) => s + e.hours, 0)
+  const maxEarned   = Math.max(...employees.map(e => getBalance(e.id).earned), 1)
+
+  const openDetail = (empId: string) => { setSelEmpId(empId); setDetailModal(true) }
 
   if (loading) return <div className="flex h-full items-center justify-center text-slate-400">로딩 중...</div>
+
+  const selEmp = employees.find(e => e.id === selEmpId)
+  const selEntries = selEmpId ? entries.filter(e => e.employee_id === selEmpId) : []
 
   return (
     <div className="flex flex-col h-full overflow-auto">
@@ -66,11 +70,12 @@ function ManagerView({ selEmpDefault }: { selEmpDefault: string }) {
       } />
       <div className="p-6 space-y-5">
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-4 gap-4">
           {[
-            { label: '전체 직원',       value: employees.length,        unit:'명', color:'text-slate-800' },
-            { label: '총 적립 오버타임', value: totalEarned.toFixed(1),  unit:'h',  color:'text-blue-600' },
-            { label: '총 사용 오버타임', value: totalUsed.toFixed(1),    unit:'h',  color:'text-amber-600' },
+            { label: '전체 직원',        value: employees.length,       unit:'명', color:'text-slate-800' },
+            { label: '총 적립',          value: totalEarned.toFixed(1), unit:'h',  color:'text-blue-600' },
+            { label: '총 사용',          value: totalUsed.toFixed(1),   unit:'h',  color:'text-amber-600' },
+            { label: '잔여 (전체)',      value: (totalEarned - totalUsed).toFixed(1), unit:'h', color: totalEarned - totalUsed >= 0 ? 'text-green-600' : 'text-red-600' },
           ].map(s => (
             <div key={s.label} className="bg-white rounded-2xl border border-slate-200 p-5">
               <div className="text-xs font-semibold text-slate-400 mb-2">{s.label}</div>
@@ -81,77 +86,110 @@ function ManagerView({ selEmpDefault }: { selEmpDefault: string }) {
           ))}
         </div>
 
-        <div className="grid grid-cols-5 gap-5">
-          {/* Employee list */}
-          <div className="col-span-2 bg-white rounded-2xl border border-slate-200 overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-100 font-bold text-sm text-slate-700">직원별 현황</div>
-            <div className="divide-y divide-slate-100 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 320px)' }}>
+        {/* Overview table */}
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr>
+                {['이름','소속','직급','적립','사용','잔여','현황','내역'].map(h => (
+                  <th key={h} className="bg-slate-50 px-4 py-3 text-left text-xs font-bold text-slate-500 border-b border-slate-200 whitespace-nowrap">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
               {employees.map(e => {
                 const bal = getBalance(e.id)
                 const col = DEPT_COLORS[e.dept] || '#64748b'
+                const pct = Math.min(100, maxEarned > 0 ? Math.round(bal.earned / maxEarned * 100) : 0)
+                const usedPct = bal.earned > 0 ? Math.min(100, Math.round(bal.used / bal.earned * 100)) : 0
                 return (
-                  <button key={e.id} onClick={() => setSelEmpId(e.id === selEmpId ? '' : e.id)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors ${selEmpId === e.id ? 'bg-blue-50' : ''}`}>
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-                      style={{ background: col }}>{e.name[0]}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold text-slate-700">{e.name}</div>
-                      <div className="text-xs text-slate-400">{e.position}</div>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <div className={`text-sm font-bold ${bal.remain < 0 ? 'text-red-600' : bal.remain > 0 ? 'text-green-600' : 'text-slate-400'}`}>
-                        {bal.remain.toFixed(1)}h
+                  <tr key={e.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                          style={{ background: col }}>{e.name[0]}</div>
+                        <span className="text-sm font-semibold text-slate-700">{e.name}</span>
                       </div>
-                      <div className="text-xs text-slate-400">잔여</div>
-                    </div>
-                  </button>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: col + '18', color: col }}>{e.dept}</span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">{e.position}</td>
+                    <td className="px-4 py-3 text-sm font-bold text-blue-600 whitespace-nowrap">
+                      {bal.earned > 0 ? `+${bal.earned.toFixed(1)}h` : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-bold text-amber-600 whitespace-nowrap">
+                      {bal.used > 0 ? `-${bal.used.toFixed(1)}h` : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className={`text-sm font-bold ${bal.remain < 0 ? 'text-red-600' : bal.remain > 0 ? 'text-green-600' : 'text-slate-400'}`}>
+                        {bal.remain.toFixed(1)}h
+                      </span>
+                    </td>
+                    <td className="px-4 py-3" style={{ minWidth: 100 }}>
+                      {bal.earned > 0 ? (
+                        <div className="space-y-0.5">
+                          <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden" style={{ width: `${pct}%`, minWidth: 40 }}>
+                            <div className="h-full rounded-full bg-blue-400" style={{ width: '100%' }} />
+                          </div>
+                          <div className="h-1.5 rounded-full overflow-hidden" style={{ width: `${pct}%`, minWidth: 40, background: '#fde68a' }}>
+                            <div className="h-full rounded-full bg-amber-400" style={{ width: `${usedPct}%` }} />
+                          </div>
+                        </div>
+                      ) : <span className="text-xs text-slate-300">없음</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => openDetail(e.id)}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-semibold px-2 py-1 rounded hover:bg-blue-50">
+                        내역
+                      </button>
+                    </td>
+                  </tr>
                 )
               })}
-            </div>
-          </div>
-
-          {/* Detail panel */}
-          <div className="col-span-3 bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col">
-            {selEmp ? (
-              <>
-                <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
-                  <div className="font-bold text-sm text-slate-700">{selEmp.name} 오버타임 내역</div>
-                  <div className="flex gap-3 text-xs">
-                    {(() => { const b = getBalance(selEmp.id); return (
-                      <>
-                        <span className="text-blue-600 font-semibold">적립 {b.earned.toFixed(1)}h</span>
-                        <span className="text-amber-600 font-semibold">사용 {b.used.toFixed(1)}h</span>
-                        <span className={`font-bold ${b.remain < 0 ? 'text-red-600' : 'text-green-600'}`}>잔여 {b.remain.toFixed(1)}h</span>
-                      </>
-                    )})()}
-                  </div>
-                </div>
-                <div className="divide-y divide-slate-100 overflow-y-auto flex-1">
-                  {selEntries.length === 0 ? (
-                    <p className="text-sm text-slate-400 text-center py-10">내역 없음</p>
-                  ) : selEntries.map(en => (
-                    <div key={en.id} className="flex items-center gap-3 px-4 py-3">
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${en.type === 'earn' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
-                        {en.type === 'earn' ? '적립' : '사용'}
-                      </span>
-                      <span className="text-sm text-slate-500">{en.date}</span>
-                      {en.note && <span className="text-xs text-slate-400 flex-1 truncate">{en.note}</span>}
-                      <span className={`text-sm font-bold ml-auto ${en.type === 'earn' ? 'text-blue-600' : 'text-amber-600'}`}>
-                        {en.type === 'earn' ? '+' : '-'}{en.hours}h
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <div className="flex flex-col flex-1 items-center justify-center py-20 text-slate-400">
-                <div className="text-4xl mb-3">←</div>
-                <p className="text-sm">직원을 선택하면 상세 내역이 표시됩니다</p>
-              </div>
-            )}
-          </div>
+            </tbody>
+          </table>
         </div>
       </div>
+
+      {/* Detail Modal */}
+      <Modal open={detailModal} onClose={() => setDetailModal(false)}
+        title={selEmp ? `${selEmp.name} 오버타임 내역` : '내역'} size="sm">
+        {selEmp && (() => {
+          const b = getBalance(selEmp.id)
+          return (
+            <div className="space-y-4">
+              <div className="flex gap-4 text-sm">
+                <span className="text-blue-600 font-semibold">적립 {b.earned.toFixed(1)}h</span>
+                <span className="text-amber-600 font-semibold">사용 {b.used.toFixed(1)}h</span>
+                <span className={`font-bold ${b.remain < 0 ? 'text-red-600' : 'text-green-600'}`}>잔여 {b.remain.toFixed(1)}h</span>
+              </div>
+              <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto rounded-xl border border-slate-100">
+                {selEntries.length === 0 ? (
+                  <p className="text-sm text-slate-400 text-center py-8">내역 없음</p>
+                ) : selEntries.map(en => (
+                  <div key={en.id} className="flex items-center gap-3 px-4 py-3">
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${en.type === 'earn' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                      {en.type === 'earn' ? '적립' : '사용'}
+                    </span>
+                    <span className="text-sm text-slate-500">{en.date}</span>
+                    {en.note && <span className="text-xs text-slate-400 flex-1 truncate">{en.note}</span>}
+                    <span className={`text-sm font-bold ml-auto ${en.type === 'earn' ? 'text-blue-600' : 'text-amber-600'}`}>
+                      {en.type === 'earn' ? '+' : '-'}{en.hours}h
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-end">
+                <button onClick={() => { setDetailModal(false); setAddModal(true) }}
+                  className="text-sm text-blue-600 hover:text-blue-800 font-semibold">+ 항목 추가</button>
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
 
       <OvertimeAddModal
         open={addModal}

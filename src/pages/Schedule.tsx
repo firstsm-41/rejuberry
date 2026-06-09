@@ -103,12 +103,43 @@ export default function Schedule() {
     await applyStatus(empId, day, status)
   }
 
-  // Keyboard shortcuts: D S H Y O(→OFF) Backspace/Delete(→공백) Esc
+  // Keyboard shortcuts + 상하좌우 셀 이동
   useEffect(() => {
     if (!picker || !canEdit) return
     const KEY_MAP: Record<string, WorkStatus> = { d:'D', s:'S', h:'H', y:'Y', o:'OFF' }
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { setPicker(null); return }
+
+      // 상하좌우 이동
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        setPicker(prev => prev ? { ...prev, day: Math.max(1, prev.day - 1) } : null)
+        return
+      }
+      if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        setPicker(prev => prev ? { ...prev, day: Math.min(dim, prev.day + 1) } : null)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setPicker(prev => {
+          if (!prev) return null
+          const idx = employees.findIndex(emp => emp.id === prev.empId)
+          return { ...prev, empId: employees[Math.max(0, idx - 1)]?.id ?? prev.empId }
+        })
+        return
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setPicker(prev => {
+          if (!prev) return null
+          const idx = employees.findIndex(emp => emp.id === prev.empId)
+          return { ...prev, empId: employees[Math.min(employees.length - 1, idx + 1)]?.id ?? prev.empId }
+        })
+        return
+      }
+
       const k = e.key.toLowerCase()
       const isClear = k === 'backspace' || k === 'delete'
       const status = KEY_MAP[k] ?? (isClear ? '' : undefined)
@@ -120,7 +151,7 @@ export default function Schedule() {
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [picker, canEdit, applyStatus])
+  }, [picker, canEdit, applyStatus, employees, dim])
 
   // Cell click handler
   const handleCellClick = (e: React.MouseEvent, empId: string, day: number) => {
@@ -318,6 +349,7 @@ export default function Schedule() {
                             const isSat = w === 6, isSun = w === 0
                             const isSel = selectedDay === d
                             const isClickable = canEdit || isMyRow
+                            const isPickerTarget = canEdit && picker?.empId === e.id && picker?.day === d
                             return (
                               <td key={d}
                                 onClick={ev => handleCellClick(ev, e.id, d)}
@@ -328,9 +360,11 @@ export default function Schedule() {
                                     : cfg.bg,
                                   color: cfg.color === 'transparent' ? 'transparent' : cfg.color,
                                   borderRight: isSat ? '2px solid #bfdbfe' : isSun ? '2px solid #fecaca' : undefined,
-                                  outline: isSel ? '1px solid #93c5fd' : undefined,
+                                  outline: isPickerTarget ? '2px solid #2563eb' : isSel ? '1px solid #93c5fd' : undefined,
                                   minWidth: 40,
                                   padding: '7px 2px',
+                                  zIndex: isPickerTarget ? 1 : undefined,
+                                  position: isPickerTarget ? 'relative' : undefined,
                                 }}>
                                 {st}
                               </td>
