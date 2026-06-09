@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+body {
+  font-family: -apple-system, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+  margin: 0;
+}
+
+#root {
+  height: 100vh;
+}
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: #f8fafc; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+
+.sch-cell {
+  cursor: pointer;
+  min-width: 32px;
+  height: 30px;
+  text-align: center;
+  font-size: 11px;
+  border: 1px solid #f1f5f9;
+  user-select: none;
+  transition: filter 0.1s;
+}
+.sch-cell:hover { filter: brightness(0.88); border-color: #94a3b8 !important; }
