@@ -19,11 +19,11 @@ const DAYS_KR = ['일','월','화','수','목','금','토']
 type WorkStatus = 'D' | 'S' | 'H' | 'Y' | 'OFF' | ''
 const STATUS_ORDER: WorkStatus[] = ['D','S','H','Y','OFF','']
 const STATUS_CFG: Record<string, { label:string; bg:string; color:string }> = {
-  D:   { label:'근무',  bg:'#bfdbfe', color:'#1e3a8a' },  // 파랑
-  S:   { label:'추가',  bg:'#ddd6fe', color:'#4c1d95' },  // 보라
-  H:   { label:'반차',  bg:'#fde68a', color:'#78350f' },  // 노랑
-  Y:   { label:'연차',  bg:'#bbf7d0', color:'#14532d' },  // 초록
-  OFF: { label:'휴무',  bg:'#e2e8f0', color:'#475569' },  // 회색
+  D:   { label:'근무',  bg:'#bfdbfe', color:'#0f172a' },  // 파랑
+  S:   { label:'추가',  bg:'#ddd6fe', color:'#0f172a' },  // 보라
+  H:   { label:'반차',  bg:'#bbf7d0', color:'#0f172a' },  // 초록
+  Y:   { label:'연차',  bg:'#fed7aa', color:'#0f172a' },  // 주황
+  OFF: { label:'휴무',  bg:'#fecaca', color:'#0f172a' },  // 빨강
   '':  { label:'공백',  bg:'transparent', color:'transparent' },
 }
 
@@ -433,8 +433,10 @@ export default function Schedule() {
                       const sch = schMap[e.id] || {}
                       const sum = calcSummary(e.id)
                       const isMyRow = !canEdit && profile?.employee_id === e.id
+                      const rowBg = DEPT_COLORS[e.dept] ? DEPT_COLORS[e.dept] + '0c' : '#00000005'
                       return (
-                        <tr key={e.id} className={`${isMyRow ? 'bg-blue-50/40' : 'hover:bg-slate-50/50'}`}>
+                        <tr key={e.id} style={{ background: isMyRow ? '#eff6ff' : rowBg }}
+                          className="hover:brightness-95 transition-all">
                           <td className="px-2 py-1.5 font-mono text-xs text-slate-400 whitespace-nowrap">{e.id}</td>
                           <td className="px-2 py-1.5 text-xs font-semibold text-slate-700 whitespace-nowrap">{e.name}</td>
                           <td className="px-2 py-1.5 text-xs text-slate-400 whitespace-nowrap">{e.position}</td>
