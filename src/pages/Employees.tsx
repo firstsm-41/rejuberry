@@ -23,24 +23,31 @@ const EMPTY_EMP: Partial<Employee> = {
 export default function Employees() {
   const { profile } = useAuth()
   const canEdit = (profile?.level ?? 2) <= 1
-  const canViewSensitive = (profile?.level ?? 2) <= 1  // 급여·주민번호: 운영자+만
+  const canViewSensitive = (profile?.level ?? 2) <= 1
 
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
-  const [modal, setModal] = useState<{ open: boolean; emp: Partial<Employee>; isEdit: boolean }>({
-    open: false, emp: EMPTY_EMP, isEdit: false
-  })
+
+  // 신규 등록 모달
+  const [addModal, setAddModal] = useState(false)
+  const [addEmp, setAddEmp] = useState<Partial<Employee>>({ ...EMPTY_EMP })
+  const [addError, setAddError] = useState('')
+  const [addSaving, setAddSaving] = useState(false)
+
+  // 인라인 편집
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editRow, setEditRow] = useState<Partial<Employee>>({})
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState('')
+
   const [filter, setFilter] = useState({ search: '', dept: 'all', status: 'active' })
   const [showSalary, setShowSalary] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
 
   const load = async () => {
     const { data } = await supabase.from('employees').select('*').order('id')
     setEmployees(data || [])
     setLoading(false)
   }
-
   useEffect(() => { load() }, [])
 
   const filtered = employees.filter(e => {
@@ -50,36 +57,42 @@ export default function Employees() {
     return true
   })
 
-  const openAdd = () => setModal({ open: true, emp: { ...EMPTY_EMP }, isEdit: false })
-  const openEdit = (emp: Employee) => setModal({ open: true, emp: { ...emp }, isEdit: true })
-  const closeModal = () => { setModal(m => ({ ...m, open: false })); setError('') }
+  // 인라인 수정 시작
+  const startEdit = (emp: Employee) => {
+    setEditingId(emp.id)
+    setEditRow({ ...emp })
+    setEditError('')
+  }
+  const cancelEdit = () => { setEditingId(null); setEditRow({}); setEditError('') }
 
-  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
+  const setEF = (k: keyof Employee, v: string) =>
+    setEditRow(r => ({ ...r, [k]: v }))
+
+  const saveEdit = async () => {
+    if (!editRow.name || !editRow.dept || !editRow.position || !editRow.start_date) {
+      setEditError('이름, 소속, 직급, 입사일은 필수입니다'); return
+    }
+    setEditSaving(true); setEditError('')
+    const { error } = await supabase.from('employees').update(editRow).eq('id', editingId!)
+    if (error) { setEditError(error.message); setEditSaving(false); return }
+    await load()
+    setEditingId(null); setEditRow({}); setEditSaving(false)
+  }
+
+  // 신규 등록
+  const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
-    const { emp, isEdit } = modal
-    if (!emp.id || !emp.name || !emp.dept || !emp.position || !emp.start_date) {
-      return setError('필수 항목을 모두 입력하세요')
+    if (!addEmp.id || !addEmp.name || !addEmp.dept || !addEmp.position || !addEmp.start_date) {
+      setAddError('필수 항목을 모두 입력하세요'); return
     }
-    setSaving(true); setError('')
-    try {
-      if (isEdit) {
-        const { error } = await supabase.from('employees').update(emp).eq('id', emp.id!)
-        if (error) throw error
-      } else {
-        const existing = employees.find(x => x.id === emp.id)
-        if (existing) { setError('이미 존재하는 사번입니다'); setSaving(false); return }
-        const { error } = await supabase.from('employees').insert([emp as Employee])
-        if (error) throw error
-        // Auto-add HR change
-        await supabase.from('hr_changes').insert([{ employee_id: emp.id!, type: 'join', date: emp.start_date! }])
-        // Init leave data
-        await supabase.from('leave_data').upsert([{ employee_id: emp.id!, year: new Date().getFullYear(), total_days: 15 }])
-      }
-      await load(); closeModal()
-    } catch (err: any) {
-      setError(err.message || '저장 실패')
-    }
-    setSaving(false)
+    if (employees.find(x => x.id === addEmp.id)) { setAddError('이미 존재하는 사번입니다'); return }
+    setAddSaving(true); setAddError('')
+    const { error } = await supabase.from('employees').insert([addEmp as Employee])
+    if (error) { setAddError(error.message); setAddSaving(false); return }
+    await supabase.from('hr_changes').insert([{ employee_id: addEmp.id!, type: 'join', date: addEmp.start_date! }])
+    await supabase.from('leave_data').upsert([{ employee_id: addEmp.id!, year: new Date().getFullYear(), total_days: 15 }])
+    await load()
+    setAddModal(false); setAddEmp({ ...EMPTY_EMP }); setAddSaving(false)
   }
 
   const handleDelete = async (id: string, name: string) => {
@@ -88,8 +101,8 @@ export default function Employees() {
     await load()
   }
 
-  const setField = (k: keyof Employee, v: string) =>
-    setModal(m => ({ ...m, emp: { ...m.emp, [k]: v } }))
+  const setAF = (k: keyof Employee, v: string) =>
+    setAddEmp(r => ({ ...r, [k]: v }))
 
   if (loading) return <div className="flex h-full items-center justify-center text-slate-400">로딩 중...</div>
 
@@ -98,7 +111,8 @@ export default function Employees() {
       <PageHeader
         title="직원 명단"
         action={canEdit && (
-          <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+          <button onClick={() => { setAddEmp({ ...EMPTY_EMP }); setAddError(''); setAddModal(true) }}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
             + 직원 추가
           </button>
         )}
@@ -110,15 +124,15 @@ export default function Employees() {
             value={filter.search}
             onChange={e => setFilter(f => ({ ...f, search: e.target.value }))}
             placeholder="이름, 사번, 직급 검색"
-            className="border-1.5 border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 w-52"
+            className="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 w-52"
           />
           <select value={filter.dept} onChange={e => setFilter(f => ({ ...f, dept: e.target.value }))}
-            className="border-1.5 border-slate-200 rounded-lg px-3 py-2 text-sm outline-none w-36">
+            className="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none w-36">
             <option value="all">전체 부서</option>
             {DEPTS.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
           <select value={filter.status} onChange={e => setFilter(f => ({ ...f, status: e.target.value }))}
-            className="border-1.5 border-slate-200 rounded-lg px-3 py-2 text-sm outline-none w-28">
+            className="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none w-28">
             <option value="active">재직 중</option>
             <option value="retired">퇴사</option>
             <option value="all">전체</option>
@@ -138,51 +152,152 @@ export default function Employees() {
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
-                <tr>
-                  {['사번','이름','소속','직급','전화번호','이메일','입사일', canViewSensitive ? '급여(계약)' : null,'상태',canEdit?'관리':''].filter(Boolean).map(h => (
-                    <th key={h} className="bg-slate-50 px-4 py-3 text-left text-xs font-bold text-slate-500 border-b border-slate-200 whitespace-nowrap">{h}</th>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  {['사번','이름','소속','직급','전화번호','이메일','입사일',
+                    canViewSensitive ? '급여(계약)' : null,
+                    '상태',
+                    canEdit ? '관리' : null
+                  ].filter(Boolean).map(h => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-bold text-slate-500 whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={9} className="text-center text-slate-400 py-12 text-sm">직원이 없습니다</td></tr>
-                ) : filtered.map(e => {
-                  const col = DEPT_COLORS[e.dept] || '#64748b'
+                  <tr><td colSpan={10} className="text-center text-slate-400 py-12 text-sm">직원이 없습니다</td></tr>
+                ) : filtered.map(emp => {
+                  const isEditing = editingId === emp.id
+                  const col = DEPT_COLORS[isEditing ? (editRow.dept || emp.dept) : emp.dept] || '#64748b'
+
+                  if (isEditing) {
+                    return (
+                      <tr key={emp.id} className="border-b border-blue-100 bg-blue-50/40">
+                        {/* 사번 (고정) */}
+                        <td className="px-4 py-2 font-mono text-xs text-slate-400">{emp.id}</td>
+
+                        {/* 이름 */}
+                        <td className="px-2 py-2">
+                          <input value={editRow.name || ''} onChange={e => setEF('name', e.target.value)}
+                            className="w-24 border border-blue-300 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-blue-500" />
+                        </td>
+
+                        {/* 소속 */}
+                        <td className="px-2 py-2">
+                          <select value={editRow.dept || ''} onChange={e => setEF('dept', e.target.value)}
+                            className="border border-blue-300 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-blue-500">
+                            {DEPTS.map(d => <option key={d} value={d}>{d}</option>)}
+                          </select>
+                        </td>
+
+                        {/* 직급 */}
+                        <td className="px-2 py-2">
+                          <input list="pos-list-edit" value={editRow.position || ''} onChange={e => setEF('position', e.target.value)}
+                            className="w-32 border border-blue-300 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-blue-500" />
+                          <datalist id="pos-list-edit">{POSITIONS.map(p => <option key={p} value={p} />)}</datalist>
+                        </td>
+
+                        {/* 전화번호 */}
+                        <td className="px-2 py-2">
+                          <input value={editRow.phone || ''} onChange={e => setEF('phone', e.target.value)} placeholder="010-0000-0000"
+                            className="w-32 border border-blue-300 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-blue-500" />
+                        </td>
+
+                        {/* 이메일 */}
+                        <td className="px-2 py-2">
+                          <input type="email" value={editRow.email || ''} onChange={e => setEF('email', e.target.value)}
+                            className="w-36 border border-blue-300 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-blue-500" />
+                        </td>
+
+                        {/* 입사일 */}
+                        <td className="px-2 py-2">
+                          <input type="date" value={editRow.start_date || ''} onChange={e => setEF('start_date', e.target.value)}
+                            className="border border-blue-300 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-blue-500" />
+                        </td>
+
+                        {/* 급여 */}
+                        {canViewSensitive && (
+                          <td className="px-2 py-2">
+                            <input value={editRow.salary || ''} onChange={e => setEF('salary', e.target.value)} placeholder="계약 급여"
+                              className="w-28 border border-blue-300 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-blue-500" />
+                          </td>
+                        )}
+
+                        {/* 상태 */}
+                        <td className="px-2 py-2">
+                          <select value={editRow.status || 'active'} onChange={e => setEF('status', e.target.value)}
+                            className="border border-blue-300 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-blue-500">
+                            <option value="active">재직</option>
+                            <option value="retired">퇴사</option>
+                          </select>
+                        </td>
+
+                        {/* 저장/취소 */}
+                        {canEdit && (
+                          <td className="px-2 py-2">
+                            <div className="flex flex-col gap-1 min-w-[120px]">
+                              {editError && (
+                                <span className="text-xs text-red-500 mb-1">{editError}</span>
+                              )}
+                              <div className="flex gap-1">
+                                <button onClick={saveEdit} disabled={editSaving}
+                                  className="text-xs bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold px-3 py-1.5 rounded-lg">
+                                  {editSaving ? '저장 중' : '저장'}
+                                </button>
+                                <button onClick={cancelEdit}
+                                  className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold px-3 py-1.5 rounded-lg">
+                                  취소
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    )
+                  }
+
+                  // 일반 행
                   return (
-                    <tr key={e.id} className="hover:bg-slate-50 border-b border-slate-100 last:border-0">
-                      <td className="px-4 py-3 font-mono text-xs text-slate-400">{e.id}</td>
+                    <tr key={emp.id} className="hover:bg-slate-50 border-b border-slate-100 last:border-0">
+                      <td className="px-4 py-3 font-mono text-xs text-slate-400">{emp.id}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ background: col }}>{e.name[0]}</div>
-                          <span className="font-semibold text-sm text-slate-800">{e.name}</span>
+                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                            style={{ background: col }}>{emp.name[0]}</div>
+                          <span className="font-semibold text-sm text-slate-800">{emp.name}</span>
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="text-xs font-semibold px-2 py-1 rounded-md" style={{ background: col + '18', color: col }}>{e.dept}</span>
+                        <span className="text-xs font-semibold px-2 py-1 rounded-md"
+                          style={{ background: col + '18', color: col }}>{emp.dept}</span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-600">{e.position}</td>
-                      <td className="px-4 py-3 text-sm text-slate-500">{e.phone || '-'}</td>
-                      <td className="px-4 py-3 text-sm text-slate-500">{e.email || '-'}</td>
-                      <td className="px-4 py-3 text-sm text-slate-500">{e.start_date}</td>
+                      <td className="px-4 py-3 text-sm text-slate-600">{emp.position}</td>
+                      <td className="px-4 py-3 text-sm text-slate-500">{emp.phone || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-slate-500">{emp.email || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-slate-500">{emp.start_date}</td>
                       {canViewSensitive && (
                         <td className="px-4 py-3 text-sm font-medium">
                           {showSalary
-                            ? <span className="text-slate-600">{e.salary || '-'}</span>
-                            : <span className="text-slate-400 tracking-widest">{e.salary ? '●●●●●' : '-'}</span>
+                            ? <span className="text-slate-600">{emp.salary || '-'}</span>
+                            : <span className="text-slate-400 tracking-widest">{emp.salary ? '●●●●●' : '-'}</span>
                           }
                         </td>
                       )}
                       <td className="px-4 py-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${e.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                          {e.status === 'active' ? '재직' : '퇴사'}
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${emp.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                          {emp.status === 'active' ? '재직' : '퇴사'}
                         </span>
                       </td>
                       {canEdit && (
                         <td className="px-4 py-3">
                           <div className="flex gap-1.5">
-                            <button onClick={() => openEdit(e)} className="text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-1 rounded hover:bg-blue-50">수정</button>
-                            <button onClick={() => handleDelete(e.id, e.name)} className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-red-50">삭제</button>
+                            <button onClick={() => startEdit(emp)}
+                              className="text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-1 rounded hover:bg-blue-50">
+                              수정
+                            </button>
+                            <button onClick={() => handleDelete(emp.id, emp.name)}
+                              className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-red-50">
+                              삭제
+                            </button>
                           </div>
                         </td>
                       )}
@@ -195,92 +310,92 @@ export default function Employees() {
         </div>
       </div>
 
-      {/* Modal */}
-      <Modal open={modal.open} onClose={closeModal} title={modal.isEdit ? '직원 정보 수정' : '신규 직원 등록'}>
-        <form onSubmit={handleSave} className="space-y-4">
+      {/* 신규 등록 모달 (추가 시에만 사용) */}
+      <Modal open={addModal} onClose={() => { setAddModal(false); setAddError('') }} title="신규 직원 등록">
+        <form onSubmit={handleAdd} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <Field label="사번 *">
-              <input value={modal.emp.id || ''} onChange={e => setField('id', e.target.value)}
-                readOnly={modal.isEdit} required
-                className={`w-full border-1.5 border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 ${modal.isEdit ? 'bg-slate-50' : ''}`} />
+              <input value={addEmp.id || ''} onChange={e => setAF('id', e.target.value)} required
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
             </Field>
             <Field label="성명 *">
-              <input value={modal.emp.name || ''} onChange={e => setField('name', e.target.value)} required
-                className="w-full border-1.5 border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
+              <input value={addEmp.name || ''} onChange={e => setAF('name', e.target.value)} required
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
             </Field>
             {canViewSensitive ? (
               <Field label="주민등록번호">
-                <input value={modal.emp.ssn || ''} onChange={e => setField('ssn', e.target.value)} placeholder="000000-0000000"
-                  className="w-full border-1.5 border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                <input value={addEmp.ssn || ''} onChange={e => setAF('ssn', e.target.value)} placeholder="000000-0000000"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
               </Field>
             ) : (
               <Field label="주민등록번호">
-                <div className="w-full border-1.5 border-slate-100 rounded-lg px-3 py-2 text-sm bg-slate-50 text-slate-400">열람 권한 없음</div>
+                <div className="w-full border border-slate-100 rounded-lg px-3 py-2 text-sm bg-slate-50 text-slate-400">열람 권한 없음</div>
               </Field>
             )}
             <Field label="생년월일">
-              <input type="date" value={modal.emp.birth_date || ''} onChange={e => setField('birth_date', e.target.value)}
-                readOnly={!canViewSensitive}
-                className={`w-full border-1.5 border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 ${!canViewSensitive ? 'bg-slate-50' : ''}`} />
+              <input type="date" value={addEmp.birth_date || ''} onChange={e => setAF('birth_date', e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
             </Field>
             <Field label="전화번호">
-              <input value={modal.emp.phone || ''} onChange={e => setField('phone', e.target.value)} placeholder="010-0000-0000"
-                className="w-full border-1.5 border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
+              <input value={addEmp.phone || ''} onChange={e => setAF('phone', e.target.value)} placeholder="010-0000-0000"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
             </Field>
             <Field label="이메일">
-              <input type="email" value={modal.emp.email || ''} onChange={e => setField('email', e.target.value)}
-                className="w-full border-1.5 border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
+              <input type="email" value={addEmp.email || ''} onChange={e => setAF('email', e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
             </Field>
             <Field label="소속 *">
-              <select value={modal.emp.dept || ''} onChange={e => setField('dept', e.target.value)} required
-                className="w-full border-1.5 border-slate-200 rounded-lg px-3 py-2 text-sm outline-none">
+              <select value={addEmp.dept || ''} onChange={e => setAF('dept', e.target.value)} required
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none">
                 {DEPTS.map(d => <option key={d} value={d}>{d}</option>)}
               </select>
             </Field>
             <Field label="직급 *">
-              <input list="pos-list" value={modal.emp.position || ''} onChange={e => setField('position', e.target.value)} required
-                className="w-full border-1.5 border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
-              <datalist id="pos-list">{POSITIONS.map(p => <option key={p} value={p} />)}</datalist>
+              <input list="pos-list-add" value={addEmp.position || ''} onChange={e => setAF('position', e.target.value)} required
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
+              <datalist id="pos-list-add">{POSITIONS.map(p => <option key={p} value={p} />)}</datalist>
             </Field>
             {canViewSensitive ? (
               <Field label="급여(계약)">
-                <input value={modal.emp.salary || ''} onChange={e => setField('salary', e.target.value)}
-                  className="w-full border-1.5 border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                <input value={addEmp.salary || ''} onChange={e => setAF('salary', e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
               </Field>
             ) : (
               <Field label="급여(계약)">
-                <div className="w-full border-1.5 border-slate-100 rounded-lg px-3 py-2 text-sm bg-slate-50 text-slate-400">열람 권한 없음</div>
+                <div className="w-full border border-slate-100 rounded-lg px-3 py-2 text-sm bg-slate-50 text-slate-400">열람 권한 없음</div>
               </Field>
             )}
             <Field label="이전 직장">
-              <input value={modal.emp.prev_company || ''} onChange={e => setField('prev_company', e.target.value)}
-                className="w-full border-1.5 border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
+              <input value={addEmp.prev_company || ''} onChange={e => setAF('prev_company', e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
             </Field>
             <Field label="입사일 *">
-              <input type="date" value={modal.emp.start_date || ''} onChange={e => setField('start_date', e.target.value)} required
-                className="w-full border-1.5 border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
+              <input type="date" value={addEmp.start_date || ''} onChange={e => setAF('start_date', e.target.value)} required
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
             </Field>
             <Field label="퇴사일">
-              <input type="date" value={modal.emp.end_date || ''} onChange={e => setField('end_date', e.target.value)}
-                className="w-full border-1.5 border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
+              <input type="date" value={addEmp.end_date || ''} onChange={e => setAF('end_date', e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
             </Field>
             <Field label="재직 상태">
-              <select value={modal.emp.status || 'active'} onChange={e => setField('status', e.target.value as 'active' | 'retired')}
-                className="w-full border-1.5 border-slate-200 rounded-lg px-3 py-2 text-sm outline-none">
+              <select value={addEmp.status || 'active'} onChange={e => setAF('status', e.target.value as 'active' | 'retired')}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none">
                 <option value="active">재직 중</option>
                 <option value="retired">퇴사</option>
               </select>
             </Field>
             <Field label="비고" className="col-span-2">
-              <input value={modal.emp.note || ''} onChange={e => setField('note', e.target.value)}
-                className="w-full border-1.5 border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
+              <input value={addEmp.note || ''} onChange={e => setAF('note', e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
             </Field>
           </div>
-          {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-4 py-2">{error}</p>}
+          {addError && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-4 py-2">{addError}</p>}
           <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
-            <button type="button" onClick={closeModal} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-semibold">취소</button>
-            <button type="submit" disabled={saving} className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 py-2 rounded-lg text-sm font-semibold">
-              {saving ? '저장 중...' : modal.isEdit ? '저장' : '등록'}
+            <button type="button" onClick={() => { setAddModal(false); setAddError('') }}
+              className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-semibold">취소</button>
+            <button type="submit" disabled={addSaving}
+              className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+              {addSaving ? '저장 중...' : '등록'}
             </button>
           </div>
         </form>
