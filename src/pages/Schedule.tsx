@@ -146,7 +146,7 @@ export default function Schedule() {
       if (status === undefined) return
       e.preventDefault()
       const { empId, day } = picker
-      setPicker(null)
+      // picker를 닫지 않고 상태만 적용 → 이후 화살표 이동 가능
       applyStatus(empId, day, status)
     }
     document.addEventListener('keydown', handler)
@@ -430,7 +430,7 @@ export default function Schedule() {
         <div ref={pickerRef}
           style={{ position:'fixed', left:picker.x, top:picker.y, zIndex:300 }}
           className="bg-white rounded-xl shadow-2xl p-2 flex items-center gap-1 border border-slate-200">
-          <span className="text-xs text-slate-400 px-1 mr-1 font-mono">D·S·H·Y·O</span>
+          <span className="text-xs text-slate-400 px-1 mr-1 font-mono">D·S·H·Y·O·방향키·Esc</span>
           {STATUS_ORDER.map(s => {
             const cfg = STATUS_CFG[s]
             const cur = (schMap[picker.empId] || {})[picker.day] || ''

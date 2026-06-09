@@ -5,6 +5,8 @@ import type { Employee, OvertimeEntry } from '../types/database'
 import PageHeader from '../components/PageHeader'
 import Modal from '../components/Modal'
 
+const DEPT_ORDER = ['대표원장','부원장','총괄실장','실장','코디','간호','피부1(시술)','피부2(관리)','마케팅','미분류']
+
 const DEPT_COLORS: Record<string, string> = {
   '대표원장':'#1e40af','부원장':'#1d4ed8','총괄실장':'#6d28d9',
   '실장':'#7c3aed','코디':'#0369a1','간호':'#047857',
@@ -51,7 +53,6 @@ function ManagerView({ selEmpDefault }: { selEmpDefault: string }) {
 
   const totalEarned = entries.filter(e => e.type === 'earn').reduce((s, e) => s + e.hours, 0)
   const totalUsed   = entries.filter(e => e.type === 'use').reduce((s, e) => s + e.hours, 0)
-  const maxEarned   = Math.max(...employees.map(e => getBalance(e.id).earned), 1)
 
   const openDetail = (empId: string) => { setSelEmpId(empId); setDetailModal(true) }
 
@@ -86,72 +87,54 @@ function ManagerView({ selEmpDefault }: { selEmpDefault: string }) {
           ))}
         </div>
 
-        {/* Overview table */}
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                {['이름','소속','직급','적립','사용','잔여','현황','내역'].map(h => (
-                  <th key={h} className="bg-slate-50 px-4 py-3 text-left text-xs font-bold text-slate-500 border-b border-slate-200 whitespace-nowrap">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {employees.map(e => {
-                const bal = getBalance(e.id)
-                const col = DEPT_COLORS[e.dept] || '#64748b'
-                const pct = Math.min(100, maxEarned > 0 ? Math.round(bal.earned / maxEarned * 100) : 0)
-                const usedPct = bal.earned > 0 ? Math.min(100, Math.round(bal.used / bal.earned * 100)) : 0
-                return (
-                  <tr key={e.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+        {/* 팀별 카드 */}
+        {DEPT_ORDER.filter(dept => {
+          const deptEmps = employees.filter(e => e.dept === dept)
+          return deptEmps.length > 0
+        }).map(dept => {
+          const col = DEPT_COLORS[dept] || '#64748b'
+          const deptEmps = employees.filter(e => e.dept === dept)
+          return (
+            <div key={dept}>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-2.5 h-2.5 rounded-full" style={{ background: col }} />
+                <span className="text-xs font-bold" style={{ color: col }}>{dept}</span>
+                <span className="text-xs text-slate-400">{deptEmps.length}명</span>
+              </div>
+              <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))' }}>
+                {deptEmps.map(e => {
+                  const bal = getBalance(e.id)
+                  const usedPct = bal.earned > 0 ? Math.min(100, Math.round(bal.used / bal.earned * 100)) : 0
+                  return (
+                    <button key={e.id} onClick={() => openDetail(e.id)}
+                      className="bg-white border border-slate-200 rounded-2xl p-4 text-left hover:shadow-md hover:border-slate-300 transition-all group">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
                           style={{ background: col }}>{e.name[0]}</div>
-                        <span className="text-sm font-semibold text-slate-700">{e.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: col + '18', color: col }}>{e.dept}</span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">{e.position}</td>
-                    <td className="px-4 py-3 text-sm font-bold text-blue-600 whitespace-nowrap">
-                      {bal.earned > 0 ? `+${bal.earned.toFixed(1)}h` : <span className="text-slate-300">—</span>}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-bold text-amber-600 whitespace-nowrap">
-                      {bal.used > 0 ? `-${bal.used.toFixed(1)}h` : <span className="text-slate-300">—</span>}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span className={`text-sm font-bold ${bal.remain < 0 ? 'text-red-600' : bal.remain > 0 ? 'text-green-600' : 'text-slate-400'}`}>
-                        {bal.remain.toFixed(1)}h
-                      </span>
-                    </td>
-                    <td className="px-4 py-3" style={{ minWidth: 100 }}>
-                      {bal.earned > 0 ? (
-                        <div className="space-y-0.5">
-                          <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden" style={{ width: `${pct}%`, minWidth: 40 }}>
-                            <div className="h-full rounded-full bg-blue-400" style={{ width: '100%' }} />
-                          </div>
-                          <div className="h-1.5 rounded-full overflow-hidden" style={{ width: `${pct}%`, minWidth: 40, background: '#fde68a' }}>
-                            <div className="h-full rounded-full bg-amber-400" style={{ width: `${usedPct}%` }} />
-                          </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-bold text-slate-700 truncate">{e.name}</div>
+                          <div className="text-xs text-slate-400 truncate">{e.position}</div>
                         </div>
-                      ) : <span className="text-xs text-slate-300">없음</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <button onClick={() => openDetail(e.id)}
-                        className="text-xs text-blue-600 hover:text-blue-800 font-semibold px-2 py-1 rounded hover:bg-blue-50">
-                        내역
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-blue-500 font-semibold">적립 {bal.earned.toFixed(1)}h</span>
+                          <span className="text-amber-500 font-semibold">사용 {bal.used.toFixed(1)}h</span>
+                        </div>
+                        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${usedPct}%` }} />
+                        </div>
+                        <div className={`text-sm font-bold text-right ${bal.remain < 0 ? 'text-red-600' : bal.remain > 0 ? 'text-green-600' : 'text-slate-400'}`}>
+                          잔여 {bal.remain.toFixed(1)}h
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
       </div>
 
       {/* Detail Modal */}
