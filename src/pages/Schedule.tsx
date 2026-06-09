@@ -681,7 +681,7 @@ function ScheduleCreateModal({ year, month, employees, onClose, onCreated }: Sch
       .select('*')
       .lte('start_date', endDate)
       .gte('end_date', startDate)
-      .then(({ data }) => {
+      .then(({ data }: { data: Array<{ employee_id: string; start_date: string; end_date: string; type: string }> | null }) => {
         const expanded: Array<{ empId: string; day: number; type: string }> = []
         for (const entry of (data || [])) {
           const s = new Date(entry.start_date), e = new Date(entry.end_date)

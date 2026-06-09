@@ -521,7 +521,7 @@ function LeaveRequestModal({ open, onClose, employees, defaultEmpId, lockEmpId =
           <div className="flex gap-2">
             {[{v:'Y',l:'연차'},{v:'H',l:'반차'}].map(({v,l}) => (
               <button key={v} type="button"
-                onClick={() => setForm(f => ({ ...f, type: v, days: v === 'H' ? '0.5' : f.days }))}
+                onClick={() => setForm(f => ({ ...f, type: v as 'H' | 'Y', days: v === 'H' ? '0.5' : f.days }))}
                 className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-colors ${form.type === v ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
                 {l}
               </button>
@@ -597,7 +597,7 @@ function EditLeaveRequestModal({ req, onClose, onSaved }:
           <div className="flex gap-2">
             {[{v:'Y',l:'연차'},{v:'H',l:'반차'}].map(({v,l}) => (
               <button key={v} type="button"
-                onClick={() => setForm(f => ({ ...f, type: v, days: v === 'H' ? '0.5' : f.days }))}
+                onClick={() => setForm(f => ({ ...f, type: v as 'H' | 'Y', days: v === 'H' ? '0.5' : f.days }))}
                 className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-colors ${form.type === v ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
                 {l}
               </button>
