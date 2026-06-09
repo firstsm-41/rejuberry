@@ -59,6 +59,15 @@ export default function Dashboard() {
   const onLeave = employees.filter(e => ['Y','H'].includes(todaySchedule[e.id] || ''))
   const noData  = employees.filter(e => !todaySchedule[e.id])
 
+  // 오늘 생일인 직원
+  const todayMM = String(todayM).padStart(2, '0')
+  const todayDD = String(todayD).padStart(2, '0')
+  const birthdayEmps = employees.filter(e => {
+    if (!e.birth_date) return false
+    const parts = e.birth_date.split('-')
+    return parts[1] === todayMM && parts[2] === todayDD
+  })
+
   if (loading) return <div className="flex h-full items-center justify-center text-slate-400">로딩 중...</div>
 
   const hasSchedule = Object.keys(todaySchedule).length > 0
@@ -87,6 +96,22 @@ export default function Dashboard() {
             </div>
           ))}
         </div>
+
+        {/* 생일 배너 */}
+        {birthdayEmps.length > 0 && (
+          <div className="rounded-2xl border border-pink-200 bg-gradient-to-r from-pink-50 to-rose-50 px-5 py-3.5 flex items-center gap-3 flex-wrap">
+            <span className="text-xl">🎂</span>
+            <span className="font-bold text-pink-700 text-sm">오늘 생일인 직원</span>
+            <div className="flex gap-2 flex-wrap">
+              {birthdayEmps.map(e => (
+                <span key={e.id} className="text-sm font-semibold text-pink-800 bg-white border border-pink-200 px-3 py-1 rounded-full">
+                  {e.name}
+                  <span className="text-xs text-pink-400 ml-1">({e.dept})</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* 오늘 근무표 */}
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
