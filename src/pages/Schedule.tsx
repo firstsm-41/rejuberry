@@ -4,6 +4,8 @@ import { useAuth } from '../store/useAuth'
 import type { Employee, Schedule as SchRow } from '../types/database'
 import PageHeader from '../components/PageHeader'
 import Modal from '../components/Modal'
+import * as XLSX from 'xlsx'
+import html2canvas from 'html2canvas'
 
 const DEPTS = ['대표원장','부원장','총괄실장','실장','코디','간호','피부1(시술)','피부2(관리)','마케팅','미분류']
 const STATS_DEPTS = DEPTS.filter(d => d !== '마케팅' && d !== '미분류')
@@ -17,12 +19,12 @@ const DAYS_KR = ['일','월','화','수','목','금','토']
 type WorkStatus = 'D' | 'S' | 'H' | 'Y' | 'OFF' | ''
 const STATUS_ORDER: WorkStatus[] = ['D','S','H','Y','OFF','']
 const STATUS_CFG: Record<string, { label:string; bg:string; color:string }> = {
-  D:   { label:'근무',  bg:'#eff6ff', color:'#2563eb' },
-  S:   { label:'추가',  bg:'#f5f3ff', color:'#7c3aed' },
-  H:   { label:'반차',  bg:'#fffbeb', color:'#d97706' },
-  Y:   { label:'연차',  bg:'#f0fdf4', color:'#16a34a' },
-  OFF: { label:'휴무',  bg:'#f1f5f9', color:'#94a3b8' },
-  '':  { label:'공백',  bg:'#ffffff', color:'transparent' },
+  D:   { label:'근무',  bg:'#bfdbfe', color:'#1e3a8a' },  // 파랑
+  S:   { label:'추가',  bg:'#ddd6fe', color:'#4c1d95' },  // 보라
+  H:   { label:'반차',  bg:'#fde68a', color:'#78350f' },  // 노랑
+  Y:   { label:'연차',  bg:'#bbf7d0', color:'#14532d' },  // 초록
+  OFF: { label:'휴무',  bg:'#e2e8f0', color:'#475569' },  // 회색
+  '':  { label:'공백',  bg:'transparent', color:'transparent' },
 }
 
 type SchMap = Record<string, Record<number, WorkStatus>>
@@ -41,6 +43,7 @@ export default function Schedule() {
   const [picker, setPicker]     = useState<{ x:number; y:number; empId:string; day:number } | null>(null)
   const [swapModal, setSwapModal] = useState<{ empId:string; day:number } | null>(null)
   const pickerRef = useRef<HTMLDivElement>(null)
+  const tableContainerRef = useRef<HTMLDivElement>(null)
 
   const dim = new Date(year, month, 0).getDate()
   const dow = (d: number) => new Date(year, month - 1, d).getDay()
@@ -204,6 +207,66 @@ export default function Schedule() {
     return { D, S, H, Y, OFF }
   }
 
+  // ── 내보내기 ──────────────────────────────────────────────────────────────
+  const DAYS_EN = ['일','월','화','수','목','금','토']
+
+  const exportExcel = () => {
+    const headerRow1 = ['사번','소속','이름','직급',
+      ...Array.from({ length: dim }, (_, i) => i + 1),
+      '근무(D)','추가(S)','반차(H)','OFF','연차(Y)']
+    const headerRow2 = ['','','','',
+      ...Array.from({ length: dim }, (_, i) => DAYS_EN[new Date(year, month - 1, i + 1).getDay()]),
+      '','','','','']
+    const rows: (string | number)[][] = [headerRow1, headerRow2]
+
+    for (const dept of DEPTS) {
+      const emps = grouped[dept]
+      if (!emps.length) continue
+      rows.push([dept])
+      for (const e of emps) {
+        const sch = schMap[e.id] || {}
+        const sum = calcSummary(e.id)
+        rows.push([
+          e.id, e.dept, e.name, e.position,
+          ...Array.from({ length: dim }, (_, i) => sch[i + 1] || ''),
+          sum.D, sum.S, sum.H, sum.OFF, sum.Y,
+        ])
+      }
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(rows)
+    // 컬럼 너비 설정
+    ws['!cols'] = [
+      { wch: 6 }, { wch: 10 }, { wch: 8 }, { wch: 12 },
+      ...Array.from({ length: dim }, () => ({ wch: 4 })),
+      { wch: 6 }, { wch: 6 }, { wch: 6 }, { wch: 6 }, { wch: 6 },
+    ]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, `${year}년${month}월`)
+    XLSX.writeFile(wb, `근무표_${year}년${month}월.xlsx`)
+  }
+
+  const exportImage = async () => {
+    const el = tableContainerRef.current
+    if (!el) return
+    const prev = { maxHeight: el.style.maxHeight, overflow: el.style.overflow }
+    el.style.maxHeight = 'none'
+    el.style.overflow = 'visible'
+    await new Promise(r => requestAnimationFrame(r))
+    try {
+      const canvas = await html2canvas(el, { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' })
+      const link = document.createElement('a')
+      link.download = `근무표_${year}년${month}월.png`
+      link.href = canvas.toDataURL('image/png')
+      link.click()
+    } finally {
+      el.style.maxHeight = prev.maxHeight
+      el.style.overflow = prev.overflow
+    }
+  }
+
+  const handlePrint = () => window.print()
+
   if (loading) return <div className="flex h-full items-center justify-center text-slate-400">로딩 중...</div>
 
   return (
@@ -226,9 +289,26 @@ export default function Schedule() {
               </span>
             ))}
           </div>
+          <div className="flex items-center gap-1.5 ml-auto no-print">
+            <button onClick={exportExcel}
+              className="flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+              엑셀
+            </button>
+            <button onClick={exportImage}
+              className="flex items-center gap-1 bg-violet-50 hover:bg-violet-100 text-violet-700 border border-violet-200 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              이미지
+            </button>
+            <button onClick={handlePrint}
+              className="flex items-center gap-1 bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+              인쇄
+            </button>
+          </div>
           {canEdit
-            ? <span className="text-xs text-slate-400 ml-auto">클릭 후 D·S·H·Y·O 키 또는 팝업으로 입력</span>
-            : <span className="text-xs text-slate-400 ml-auto">본인 셀 클릭 → 팀원과 교환 신청</span>
+            ? <span className="text-xs text-slate-400 no-print">클릭 후 D·S·H·Y·O 키 또는 팝업으로 입력</span>
+            : <span className="text-xs text-slate-400 no-print">본인 셀 클릭 → 팀원과 교환 신청</span>
           }
         </div>
 
@@ -287,7 +367,7 @@ export default function Schedule() {
 
         {/* Schedule grid */}
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-          <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 240px)' }}>
+          <div ref={tableContainerRef} className="overflow-auto" style={{ maxHeight: 'calc(100vh - 240px)' }}>
             <table style={{ borderCollapse: 'separate', borderSpacing: 0, minWidth: 'max-content' }}>
               <thead>
                 <tr>
@@ -313,10 +393,10 @@ export default function Schedule() {
                       </th>
                     )
                   })}
-                  {['근무','추가','반차','OFF','연차'].map((h, i) => (
-                    <th key={h} className="text-xs text-center sticky top-0 z-10 px-1 whitespace-nowrap py-2"
-                      style={{ background: ['#eff6ff','#f5f3ff','#fffbeb','#f1f5f9','#f0fdf4'][i], color: ['#2563eb','#7c3aed','#d97706','#94a3b8','#16a34a'][i], minWidth: 30 }}>
-                      {h}
+                  {(['D','S','H','OFF','Y'] as WorkStatus[]).map(s => (
+                    <th key={s} className="text-xs text-center sticky top-0 z-10 px-1 whitespace-nowrap py-2"
+                      style={{ background: STATUS_CFG[s].bg, color: STATUS_CFG[s].color, minWidth: 32, fontWeight: 800 }}>
+                      {STATUS_CFG[s].label}
                     </th>
                   ))}
                 </tr>
@@ -353,28 +433,41 @@ export default function Schedule() {
                             return (
                               <td key={d}
                                 onClick={ev => handleCellClick(ev, e.id, d)}
-                                className={`text-center text-xs font-bold transition-colors ${isClickable ? 'cursor-pointer hover:brightness-95' : ''}`}
+                                className={`text-center transition-colors ${isClickable ? 'cursor-pointer' : ''}`}
                                 style={{
-                                  background: isSel
-                                    ? (st ? cfg.bg + 'cc' : '#e0f2fe')
-                                    : cfg.bg,
-                                  color: cfg.color === 'transparent' ? 'transparent' : cfg.color,
+                                  background: isSel ? '#dbeafe' : '#ffffff',
                                   borderRight: isSat ? '2px solid #bfdbfe' : isSun ? '2px solid #fecaca' : undefined,
-                                  outline: isPickerTarget ? '2px solid #2563eb' : isSel ? '1px solid #93c5fd' : undefined,
+                                  outline: isPickerTarget ? '2px solid #2563eb' : undefined,
                                   minWidth: 40,
-                                  padding: '7px 2px',
+                                  padding: '4px 3px',
                                   zIndex: isPickerTarget ? 1 : undefined,
                                   position: isPickerTarget ? 'relative' : undefined,
                                 }}>
-                                {st}
+                                {st ? (
+                                  <span style={{
+                                    display: 'inline-block',
+                                    background: cfg.bg,
+                                    color: cfg.color,
+                                    borderRadius: 4,
+                                    padding: '2px 5px',
+                                    fontWeight: 800,
+                                    fontSize: 11,
+                                    lineHeight: 1.4,
+                                    minWidth: 30,
+                                  }}>{st}</span>
+                                ) : null}
                               </td>
                             )
                           })}
-                          <td className="text-center text-xs font-bold px-1 py-1.5" style={{ background:'#eff6ff', color:'#2563eb', minWidth:30 }}>{sum.D||''}</td>
-                          <td className="text-center text-xs font-bold px-1 py-1.5" style={{ background:'#f5f3ff', color:'#7c3aed', minWidth:30 }}>{sum.S||''}</td>
-                          <td className="text-center text-xs font-bold px-1 py-1.5" style={{ background:'#fffbeb', color:'#d97706', minWidth:30 }}>{sum.H||''}</td>
-                          <td className="text-center text-xs px-1 py-1.5" style={{ background:'#f1f5f9', color:'#94a3b8', minWidth:30 }}>{sum.OFF||''}</td>
-                          <td className="text-center text-xs font-bold px-1 py-1.5" style={{ background:'#f0fdf4', color:'#16a34a', minWidth:30 }}>{sum.Y||''}</td>
+                          {(['D','S','H','OFF','Y'] as WorkStatus[]).map(s => {
+                            const v = s==='D'?sum.D:s==='S'?sum.S:s==='H'?sum.H:s==='OFF'?sum.OFF:sum.Y
+                            return (
+                              <td key={s} className="text-center text-xs font-bold px-1 py-1.5"
+                                style={{ background: STATUS_CFG[s].bg, color: STATUS_CFG[s].color, minWidth: 32 }}>
+                                {v || ''}
+                              </td>
+                            )
+                          })}
                         </tr>
                       )
                     }),

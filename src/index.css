@@ -24,3 +24,10 @@ body {
   transition: filter 0.1s;
 }
 .sch-cell:hover { filter: brightness(0.88); border-color: #94a3b8 !important; }
+
+@media print {
+  aside, .no-print { display: none !important; }
+  main { overflow: visible !important; }
+  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  div[style*="max-height"] { max-height: none !important; overflow: visible !important; }
+}
