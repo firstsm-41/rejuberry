@@ -7,6 +7,15 @@ import Modal from '../components/Modal'
 
 const DEPT_ORDER = ['대표원장','부원장','총괄실장','실장','코디','간호','피부1(시술)','피부2(관리)','마케팅','미분류']
 
+const fmtMin = (min: number) => {
+  if (min <= 0) return '0분'
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  if (h === 0) return `${m}분`
+  if (m === 0) return `${h}시간`
+  return `${h}시간 ${m}분`
+}
+
 const DEPT_COLORS: Record<string, string> = {
   '대표원장':'#1e40af','부원장':'#1d4ed8','총괄실장':'#6d28d9',
   '실장':'#7c3aed','코디':'#0369a1','간호':'#047857',
@@ -74,9 +83,9 @@ function ManagerView({ selEmpDefault }: { selEmpDefault: string }) {
         <div className="grid grid-cols-4 gap-4">
           {[
             { label: '전체 직원',        value: employees.length,       unit:'명', color:'text-slate-800' },
-            { label: '총 적립',          value: totalEarned.toFixed(1), unit:'h',  color:'text-blue-600' },
-            { label: '총 사용',          value: totalUsed.toFixed(1),   unit:'h',  color:'text-amber-600' },
-            { label: '잔여 (전체)',      value: (totalEarned - totalUsed).toFixed(1), unit:'h', color: totalEarned - totalUsed >= 0 ? 'text-green-600' : 'text-red-600' },
+            { label: '총 적립',          value: fmtMin(totalEarned), unit:'',  color:'text-blue-600' },
+            { label: '총 사용',          value: fmtMin(totalUsed),   unit:'',  color:'text-amber-600' },
+            { label: '잔여 (전체)',      value: fmtMin(totalEarned - totalUsed), unit:'', color: totalEarned - totalUsed >= 0 ? 'text-green-600' : 'text-red-600' },
           ].map(s => (
             <div key={s.label} className="bg-white rounded-2xl border border-slate-200 p-5">
               <div className="text-xs font-semibold text-slate-400 mb-2">{s.label}</div>
@@ -118,14 +127,14 @@ function ManagerView({ selEmpDefault }: { selEmpDefault: string }) {
                       </div>
                       <div className="space-y-1.5">
                         <div className="flex justify-between text-xs">
-                          <span className="text-blue-500 font-semibold">적립 {bal.earned.toFixed(1)}h</span>
-                          <span className="text-amber-500 font-semibold">사용 {bal.used.toFixed(1)}h</span>
+                          <span className="text-blue-500 font-semibold">+{fmtMin(bal.earned)}</span>
+                          <span className="text-amber-500 font-semibold">-{fmtMin(bal.used)}</span>
                         </div>
                         <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
                           <div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${usedPct}%` }} />
                         </div>
                         <div className={`text-sm font-bold text-right ${bal.remain < 0 ? 'text-red-600' : bal.remain > 0 ? 'text-green-600' : 'text-slate-400'}`}>
-                          잔여 {bal.remain.toFixed(1)}h
+                          잔여 {fmtMin(bal.remain)}
                         </div>
                       </div>
                     </button>
@@ -145,9 +154,9 @@ function ManagerView({ selEmpDefault }: { selEmpDefault: string }) {
           return (
             <div className="space-y-4">
               <div className="flex gap-4 text-sm">
-                <span className="text-blue-600 font-semibold">적립 {b.earned.toFixed(1)}h</span>
-                <span className="text-amber-600 font-semibold">사용 {b.used.toFixed(1)}h</span>
-                <span className={`font-bold ${b.remain < 0 ? 'text-red-600' : 'text-green-600'}`}>잔여 {b.remain.toFixed(1)}h</span>
+                <span className="text-blue-600 font-semibold">적립 {fmtMin(b.earned)}</span>
+                <span className="text-amber-600 font-semibold">사용 {fmtMin(b.used)}</span>
+                <span className={`font-bold ${b.remain < 0 ? 'text-red-600' : 'text-green-600'}`}>잔여 {fmtMin(b.remain)}</span>
               </div>
               <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto rounded-xl border border-slate-100">
                 {selEntries.length === 0 ? (
@@ -160,7 +169,7 @@ function ManagerView({ selEmpDefault }: { selEmpDefault: string }) {
                     <span className="text-sm text-slate-500">{en.date}</span>
                     {en.note && <span className="text-xs text-slate-400 flex-1 truncate">{en.note}</span>}
                     <span className={`text-sm font-bold ml-auto ${en.type === 'earn' ? 'text-blue-600' : 'text-amber-600'}`}>
-                      {en.type === 'earn' ? '+' : '-'}{en.hours}h
+                      {en.type === 'earn' ? '+' : '-'}{fmtMin(en.hours)}
                     </span>
                   </div>
                 ))}
@@ -212,7 +221,7 @@ function StaffView({ empId }: { empId: string }) {
     if (!empId) return
     const hrs = parseFloat(form.hours)
     if (tab === 'use' && hrs > remain) {
-      alert(`잔여 오버타임(${remain.toFixed(1)}h)을 초과할 수 없습니다`)
+      alert(`잔여 오버타임(${fmtMin(remain)})을 초과할 수 없습니다`)
       return
     }
     setSaving(true)
@@ -234,9 +243,9 @@ function StaffView({ empId }: { empId: string }) {
         {/* Balance */}
         <div className="grid grid-cols-3 gap-4">
           {[
-            { label: '총 적립', value: earned.toFixed(1), unit:'h', color:'text-blue-600' },
-            { label: '총 사용', value: used.toFixed(1),   unit:'h', color:'text-amber-600' },
-            { label: '잔여',    value: remain.toFixed(1), unit:'h', color: remain < 0 ? 'text-red-600' : remain === 0 ? 'text-slate-400' : 'text-green-600' },
+            { label: '총 적립', value: fmtMin(earned), unit:'', color:'text-blue-600' },
+            { label: '총 사용', value: fmtMin(used),   unit:'', color:'text-amber-600' },
+            { label: '잔여',    value: fmtMin(remain), unit:'', color: remain < 0 ? 'text-red-600' : remain === 0 ? 'text-slate-400' : 'text-green-600' },
           ].map(s => (
             <div key={s.label} className="bg-white rounded-2xl border border-slate-200 p-5 text-center">
               <div className="text-xs text-slate-400 mb-1">{s.label}</div>
@@ -265,11 +274,11 @@ function StaffView({ empId }: { empId: string }) {
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1.5">시간 (h)</label>
-                <input type="number" step="0.5" min="0.5" value={form.hours}
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">시간 (분)</label>
+                <input type="number" step="1" min="1" value={form.hours}
                   onChange={e => setForm(f => ({ ...f, hours: e.target.value }))} required
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
-                {tab === 'use' && <p className="text-xs text-slate-400 mt-1">사용 가능: {remain.toFixed(1)}h</p>}
+                {tab === 'use' && <p className="text-xs text-slate-400 mt-1">사용 가능: {fmtMin(remain)}</p>}
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1.5">메모</label>
@@ -298,7 +307,7 @@ function StaffView({ empId }: { empId: string }) {
                   <span className="text-sm text-slate-500">{en.date}</span>
                   {en.note && <span className="text-xs text-slate-400 flex-1 truncate">{en.note}</span>}
                   <span className={`text-sm font-bold ml-auto ${en.type === 'earn' ? 'text-blue-600' : 'text-amber-600'}`}>
-                    {en.type === 'earn' ? '+' : '-'}{en.hours}h
+                    {en.type === 'earn' ? '+' : '-'}{fmtMin(en.hours)}
                   </span>
                 </div>
               ))}
@@ -357,8 +366,8 @@ function OvertimeAddModal({ open, onClose, employees, defaultEmpId, onSaved }:
             </select>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-500 mb-1.5">시간 (h)</label>
-            <input type="number" step="0.5" min="0.5" value={form.hours}
+            <label className="block text-xs font-semibold text-slate-500 mb-1.5">시간 (분)</label>
+            <input type="number" step="1" min="1" value={form.hours}
               onChange={e => setForm(f => ({ ...f, hours: e.target.value }))} required
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
           </div>
