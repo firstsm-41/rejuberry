@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../store/useAuth'
 import type { HrChange, Employee } from '../types/database'
-import PageHeader from '../components/PageHeader'
+
 import Modal from '../components/Modal'
 
 const DEPT_COLORS: Record<string, string> = {
@@ -83,10 +83,12 @@ export default function Changes() {
 
   return (
     <div className="flex flex-col h-full overflow-auto">
-      <PageHeader title="입퇴사 관리" action={canEdit && (
-        <button onClick={() => setModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">+ 입퇴사 등록</button>
-      )} />
       <div className="p-6 space-y-4">
+        {canEdit && (
+          <div className="flex justify-end">
+            <button onClick={() => setModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">+ 입퇴사 등록</button>
+          </div>
+        )}
         <div className="grid grid-cols-3 gap-4">
           {[
             { label: '전체 기록', val: changes.length, color: 'text-slate-700' },

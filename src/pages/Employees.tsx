@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../store/useAuth'
 import type { Employee } from '../types/database'
-import PageHeader from '../components/PageHeader'
+
 import Modal from '../components/Modal'
 
 const DEPTS = ['대표원장','부원장','총괄실장','실장','코디','간호','피부1(시술)','피부2(관리)','마케팅','미분류']
@@ -108,15 +108,6 @@ export default function Employees() {
 
   return (
     <div className="flex flex-col h-full overflow-auto">
-      <PageHeader
-        title="직원 명단"
-        action={canEdit && (
-          <button onClick={() => { setAddEmp({ ...EMPTY_EMP }); setAddError(''); setAddModal(true) }}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
-            + 직원 추가
-          </button>
-        )}
-      />
       <div className="p-6 space-y-4">
         {/* Filter */}
         <div className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center gap-3 flex-wrap">
@@ -137,14 +128,22 @@ export default function Employees() {
             <option value="retired">퇴사</option>
             <option value="all">전체</option>
           </select>
-          {canViewSensitive && (
-            <label className="flex items-center gap-1.5 cursor-pointer select-none ml-auto">
-              <input type="checkbox" checked={showSalary} onChange={e => setShowSalary(e.target.checked)}
-                className="w-4 h-4 accent-blue-600" />
-              <span className="text-sm text-slate-600 font-medium">급여 보기</span>
-            </label>
-          )}
-          <span className="text-sm text-slate-400 ml-2">{filtered.length}명</span>
+          <div className="ml-auto flex items-center gap-3">
+            {canViewSensitive && (
+              <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input type="checkbox" checked={showSalary} onChange={e => setShowSalary(e.target.checked)}
+                  className="w-4 h-4 accent-blue-600" />
+                <span className="text-sm text-slate-600 font-medium">급여 보기</span>
+              </label>
+            )}
+            <span className="text-sm text-slate-400">{filtered.length}명</span>
+            {canEdit && (
+              <button onClick={() => { setAddEmp({ ...EMPTY_EMP }); setAddError(''); setAddModal(true) }}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">
+                + 직원 추가
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Table */}

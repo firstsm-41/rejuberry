@@ -2,9 +2,8 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../store/useAuth'
 import type { Employee, Schedule as SchRow } from '../types/database'
-import PageHeader from '../components/PageHeader'
 import Modal from '../components/Modal'
-import * as XLSX from 'xlsx'
+import * as XLSX from 'xlsx-js-style'
 import html2canvas from 'html2canvas'
 
 const DEPTS = ['대표원장','부원장','총괄실장','실장','코디','간호','피부1(시술)','피부2(관리)','마케팅','미분류']
@@ -43,8 +42,11 @@ export default function Schedule() {
   const [picker, setPicker]       = useState<{ x:number; y:number; empId:string; day:number } | null>(null)
   const [swapModal, setSwapModal] = useState<{ empId:string; day:number } | null>(null)
   const [createModal, setCreateModal] = useState(false)
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false)
+  const [pickerDisplayYear, setPickerDisplayYear] = useState(now.getFullYear())
   const pickerRef = useRef<HTMLDivElement>(null)
   const tableContainerRef = useRef<HTMLDivElement>(null)
+  const imageSlimRef = useRef<HTMLDivElement>(null)
 
   const dim = new Date(year, month, 0).getDate()
   const dow = (d: number) => new Date(year, month - 1, d).getDay()
@@ -157,6 +159,17 @@ export default function Schedule() {
     return () => document.removeEventListener('keydown', handler)
   }, [picker, canEdit, applyStatus, employees, dim])
 
+  // 월 피커 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!monthPickerOpen) return
+    const close = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.closest('[data-month-picker]')) setMonthPickerOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [monthPickerOpen])
+
   // Cell click handler
   const handleCellClick = (e: React.MouseEvent, empId: string, day: number) => {
     e.stopPropagation()
@@ -236,23 +249,71 @@ export default function Schedule() {
     }
 
     const ws = XLSX.utils.aoa_to_sheet(rows)
-    // 컬럼 너비 설정
     ws['!cols'] = [
       { wch: 6 }, { wch: 10 }, { wch: 8 }, { wch: 12 },
       ...Array.from({ length: dim }, () => ({ wch: 4 })),
       { wch: 6 }, { wch: 6 }, { wch: 6 }, { wch: 6 }, { wch: 6 },
     ]
+
+    // 셀 색상 적용
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1')
+    let dataRow = 2  // 헤더 2줄 skip
+    for (const dept of DEPTS) {
+      const emps = grouped[dept]
+      if (!emps.length) continue
+      dataRow++  // dept 행
+      for (const e of emps) {
+        const sch = schMap[e.id] || {}
+        for (let col = 4; col < 4 + dim; col++) {
+          const d = col - 3
+          const st = sch[d] || ''
+          if (!st) continue
+          const cfg = STATUS_CFG[st]
+          if (!cfg || cfg.bg === 'transparent') continue
+          const addr = XLSX.utils.encode_cell({ r: dataRow, c: col })
+          if (!ws[addr]) ws[addr] = { v: st, t: 's' }
+          ws[addr].s = {
+            fill: { patternType: 'solid', fgColor: { rgb: cfg.bg.replace('#','') } },
+            font: { bold: true, color: { rgb: cfg.color.replace('#','') } },
+            alignment: { horizontal: 'center', vertical: 'center' },
+          }
+        }
+        // 집계 컬럼 색상
+        ;(['D','S','H','OFF','Y'] as WorkStatus[]).forEach((s, si) => {
+          const addr = XLSX.utils.encode_cell({ r: dataRow, c: 4 + dim + si })
+          if (ws[addr]) {
+            ws[addr].s = {
+              fill: { patternType: 'solid', fgColor: { rgb: STATUS_CFG[s].bg.replace('#','') } },
+              font: { bold: true, color: { rgb: STATUS_CFG[s].color.replace('#','') } },
+              alignment: { horizontal: 'center' },
+            }
+          }
+        })
+        dataRow++
+      }
+    }
+    // 헤더 행 스타일
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      ;[0,1].forEach(r => {
+        const addr = XLSX.utils.encode_cell({ r, c })
+        if (!ws[addr]) return
+        ws[addr].s = {
+          fill: { patternType: 'solid', fgColor: { rgb: 'f8fafc'.replace('#','') } },
+          font: { bold: true },
+          alignment: { horizontal: 'center' },
+        }
+      })
+    }
+
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, `${year}년${month}월`)
     XLSX.writeFile(wb, `근무표_${year}년${month}월.xlsx`)
   }
 
   const exportImage = async () => {
-    const el = tableContainerRef.current
+    const el = imageSlimRef.current
     if (!el) return
-    const prev = { maxHeight: el.style.maxHeight, overflow: el.style.overflow }
-    el.style.maxHeight = 'none'
-    el.style.overflow = 'visible'
+    el.style.display = 'block'
     await new Promise(r => requestAnimationFrame(r))
     try {
       const canvas = await html2canvas(el, { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' })
@@ -261,8 +322,7 @@ export default function Schedule() {
       link.href = canvas.toDataURL('image/png')
       link.click()
     } finally {
-      el.style.maxHeight = prev.maxHeight
-      el.style.overflow = prev.overflow
+      el.style.display = 'none'
     }
   }
 
@@ -272,15 +332,95 @@ export default function Schedule() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <PageHeader title={`근무표 — ${year}년 ${month}월`} />
+      {/* 이미지 내보내기용 슬림 테이블 (숨김) */}
+      <div ref={imageSlimRef} style={{ display:'none', position:'fixed', left:0, top:0, padding:16, background:'#fff', zIndex:-1 }}>
+        <div style={{ fontWeight:800, fontSize:15, marginBottom:10, color:'#1e293b' }}>
+          {year}년 {month}월 근무표
+        </div>
+        <table style={{ borderCollapse:'collapse', fontSize:11 }}>
+          <thead>
+            <tr>
+              <th style={{ border:'1px solid #e2e8f0', padding:'4px 8px', background:'#f8fafc', minWidth:50 }}>이름</th>
+              <th style={{ border:'1px solid #e2e8f0', padding:'4px 8px', background:'#f8fafc', minWidth:70 }}>직급</th>
+              {Array.from({ length: dim }, (_, i) => {
+                const d = i + 1, w = dow(d)
+                const isSat = w===6, isSun = w===0
+                return (
+                  <th key={d} style={{ border:'1px solid #e2e8f0', padding:'4px 3px', background:'#f8fafc', minWidth:28, textAlign:'center',
+                    color: isSat?'#3b82f6':isSun?'#ef4444':'#475569' }}>
+                    <div style={{ fontWeight:700 }}>{d}</div>
+                    <div style={{ opacity:0.7, fontSize:9 }}>{DAYS_KR[w]}</div>
+                  </th>
+                )
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {employees.map(e => {
+              const sch = schMap[e.id] || {}
+              return (
+                <tr key={e.id}>
+                  <td style={{ border:'1px solid #e2e8f0', padding:'3px 8px', fontWeight:600, whiteSpace:'nowrap' }}>{e.name}</td>
+                  <td style={{ border:'1px solid #e2e8f0', padding:'3px 8px', color:'#64748b', whiteSpace:'nowrap' }}>{e.position}</td>
+                  {Array.from({ length: dim }, (_, i) => {
+                    const d = i + 1, st = sch[d] || ''
+                    const cfg = STATUS_CFG[st] || STATUS_CFG['']
+                    return (
+                      <td key={d} style={{ border:'1px solid #e2e8f0', padding:'2px 1px', textAlign:'center', background: st ? cfg.bg : '#fff' }}>
+                        {st ? <span style={{ fontWeight:800, fontSize:10, color: cfg.color }}>{st}</span> : null}
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
       <div className="flex-1 overflow-auto p-4 space-y-3">
 
         {/* Controls */}
         <div className="bg-white rounded-2xl border border-slate-200 p-3 flex items-center gap-3 flex-wrap">
-          <button onClick={() => { let m=month-1,y=year; if(m<1){m=12;y--} setMonth(m);setYear(y) }}
+          <button onClick={() => { let m=month-1,y=year; if(m<1){m=12;y--} setMonth(m);setYear(y); setPickerDisplayYear(y) }}
             className="bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-sm font-semibold">◀</button>
-          <span className="font-bold text-slate-700">{year}년 {month}월</span>
-          <button onClick={() => { let m=month+1,y=year; if(m>12){m=1;y++} setMonth(m);setYear(y) }}
+
+          {/* 월 선택 팝업 */}
+          <div className="relative" data-month-picker>
+            <button onClick={() => { setPickerDisplayYear(year); setMonthPickerOpen(v => !v) }}
+              className="font-bold text-slate-700 hover:text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors flex items-center gap-1">
+              {year}년 {month}월
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            {monthPickerOpen && (
+              <div className="absolute left-0 top-full mt-1 z-50 bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 w-64">
+                {/* 연도 */}
+                <div className="flex items-center justify-between mb-3">
+                  <button onClick={() => setPickerDisplayYear(y => y - 1)}
+                    className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-sm font-bold">‹</button>
+                  <span className="font-bold text-slate-800">{pickerDisplayYear}년</span>
+                  <button onClick={() => setPickerDisplayYear(y => y + 1)}
+                    className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-sm font-bold">›</button>
+                </div>
+                {/* 월 그리드 */}
+                <div className="grid grid-cols-4 gap-1.5">
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                    <button key={m}
+                      onClick={() => { setYear(pickerDisplayYear); setMonth(m); setMonthPickerOpen(false) }}
+                      className={`h-9 rounded-xl text-sm font-semibold transition-colors ${
+                        pickerDisplayYear === year && m === month
+                          ? 'bg-blue-600 text-white'
+                          : 'hover:bg-blue-50 text-slate-700'
+                      }`}>
+                      {m}월
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <button onClick={() => { let m=month+1,y=year; if(m>12){m=1;y++} setMonth(m);setYear(y); setPickerDisplayYear(y) }}
             className="bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-sm font-semibold">▶</button>
           <div className="flex gap-2.5 ml-3 text-xs flex-wrap">
             {Object.entries(STATUS_CFG).filter(([k]) => k !== '').map(([k, v]) => (

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../store/useAuth'
 import type { Profile } from '../types/database'
-import PageHeader from '../components/PageHeader'
+
 import Modal from '../components/Modal'
 import { Navigate } from 'react-router-dom'
 
@@ -70,10 +70,10 @@ export default function Admin() {
 
   return (
     <div className="flex flex-col h-full overflow-auto">
-      <PageHeader title="시스템 관리 (ADMIN)" action={
-        <button onClick={() => setInviteModal(true)} className="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">+ 계정 생성</button>
-      } />
       <div className="p-6 space-y-4">
+        <div className="flex justify-end">
+          <button onClick={() => setInviteModal(true)} className="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">+ 계정 생성</button>
+        </div>
         {/* Level guide */}
         <div className="bg-violet-50 rounded-2xl border border-violet-200 p-5">
           <div className="font-bold text-violet-800 text-sm mb-3">권한 레벨 안내</div>

@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../store/useAuth'
 import type { Employee, OvertimeEntry } from '../types/database'
-import PageHeader from '../components/PageHeader'
+
 import Modal from '../components/Modal'
 
 const DEPT_ORDER = ['대표원장','부원장','총괄실장','실장','코디','간호','피부1(시술)','피부2(관리)','마케팅','미분류']
@@ -72,13 +72,14 @@ function ManagerView({ selEmpDefault }: { selEmpDefault: string }) {
 
   return (
     <div className="flex flex-col h-full overflow-auto">
-      <PageHeader title="오버타임 확인" action={
-        <button onClick={() => setAddModal(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
-          + 오버타임 추가
-        </button>
-      } />
       <div className="p-6 space-y-5">
+        {/* 헤더 */}
+        <div className="flex justify-end">
+          <button onClick={() => setAddModal(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+            + 오버타임 추가
+          </button>
+        </div>
         {/* Stats */}
         <div className="grid grid-cols-4 gap-4">
           {[

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Employee } from '../types/database'
-import PageHeader from '../components/PageHeader'
 
 const DEPT_COLORS: Record<string, string> = {
   '대표원장':'#1e40af','부원장':'#1d4ed8','총괄실장':'#6d28d9',
@@ -119,7 +118,6 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col h-full overflow-auto">
-      <PageHeader title="대시보드" />
       <div className="p-5 space-y-4">
 
         {/* 생일 배너 */}
@@ -212,7 +210,7 @@ export default function Dashboard() {
                 { key:'S',  cfg: STATUS_CFG['S'],   list: byStatus['S'] },
                 { key:'Y',  cfg: STATUS_CFG['Y'],   list: byStatus['Y'] },
                 { key:'H',  cfg: STATUS_CFG['H'],   list: byStatus['H'] },
-                { key:'',   cfg: { label:'미등록', bg:'#f1f5f9', color:'#94a3b8' }, list: byStatus[''] },
+                // 미등록 제거 (표시 안 함)
               ].filter(r => r.list.length > 0)
 
               return (

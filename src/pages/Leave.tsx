@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../store/useAuth'
 import type { Employee, LeaveData, LeaveEntry, LeaveRequest } from '../types/database'
-import PageHeader from '../components/PageHeader'
 import Modal from '../components/Modal'
 
 const DEPT_COLORS: Record<string, string> = {
@@ -74,12 +73,13 @@ function StaffView() {
 
   return (
     <div className="flex flex-col h-full overflow-auto">
-      <PageHeader title="연차 관리" action={
-        <button onClick={() => setReqModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
-          + 연차 신청
-        </button>
-      } />
       <div className="p-6 space-y-5">
+        <div className="flex items-center justify-between">
+          <span className="text-base font-bold text-slate-800">연차 관리</span>
+          <button onClick={() => setReqModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+            + 연차 신청
+          </button>
+        </div>
 
         {/* 잔여 현황 */}
         <div className="grid grid-cols-4 gap-4">
@@ -201,6 +201,9 @@ function ManagerView() {
   const [year, setYear]           = useState(curYear)
   const [loading, setLoading]     = useState(true)
   const [reqModal, setReqModal]   = useState(false)
+  // total_days 인라인 편집
+  const [editingTotal, setEditingTotal] = useState<string | null>(null)
+  const [editTotalVal, setEditTotalVal] = useState('')
 
   const load = useCallback(async () => {
     const [empsRes, ldRes, leRes, reqRes] = await Promise.all([
@@ -269,22 +272,38 @@ function ManagerView() {
   const selEmp  = employees.find(e => e.id === selEmpId)
   const selInfo = selEmpId ? getLeaveInfo(selEmpId) : null
 
+  const startEditTotal = (empId: string, current: number) => {
+    setEditingTotal(empId)
+    setEditTotalVal(String(current))
+  }
+
+  const saveTotal = async (empId: string) => {
+    const val = parseFloat(editTotalVal)
+    if (isNaN(val) || val < 0) return
+    await supabase.from('leave_data').upsert(
+      { employee_id: empId, year, total_days: val },
+      { onConflict: 'employee_id,year' }
+    )
+    setEditingTotal(null)
+    await load()
+  }
+
   if (loading) return <div className="flex h-full items-center justify-center text-slate-400">로딩 중...</div>
 
   return (
     <div className="flex flex-col h-full overflow-auto">
-      <PageHeader title="연차 관리" action={
-        <button onClick={() => setReqModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
-          + 연차 신청
-        </button>
-      } />
       <div className="p-6 space-y-5">
-        {/* Tabs */}
-        <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
-          <TabBtn active={tab === 'summary'} onClick={() => setTab('summary')}>연차 현황</TabBtn>
-          <TabBtn active={tab === 'requests'} onClick={() => setTab('requests')}>
-            신청 관리 {pendingCount > 0 && <span className="ml-1 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">{pendingCount}</span>}
-          </TabBtn>
+        {/* Tabs + 연차 신청 버튼 */}
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+            <TabBtn active={tab === 'summary'} onClick={() => setTab('summary')}>연차 현황</TabBtn>
+            <TabBtn active={tab === 'requests'} onClick={() => setTab('requests')}>
+              신청 관리 {pendingCount > 0 && <span className="ml-1 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">{pendingCount}</span>}
+            </TabBtn>
+          </div>
+          <button onClick={() => setReqModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+            + 연차 신청
+          </button>
         </div>
 
         {tab === 'summary' ? (
@@ -349,11 +368,33 @@ function ManagerView() {
                       const info = getLeaveInfo(e.id)
                       const col  = DEPT_COLORS[e.dept] || '#64748b'
                       const pct  = info.total ? Math.min(100, Math.round(info.used / info.total * 100)) : 0
+                      const isEditingThis = editingTotal === e.id
                       return (
-                        <tr key={e.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 cursor-pointer" onClick={() => setSelEmpId(e.id)}>
-                          <td className="px-4 py-3 font-semibold text-sm">{e.name}</td>
-                          <td className="px-4 py-3"><span className="text-xs px-2 py-0.5 rounded" style={{ background: col+'15', color: col }}>{e.dept}</span></td>
-                          <td className="px-4 py-3 font-bold text-sm">{info.total}일</td>
+                        <tr key={e.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                          <td className="px-4 py-3 font-semibold text-sm cursor-pointer" onClick={() => setSelEmpId(e.id)}>{e.name}</td>
+                          <td className="px-4 py-3 cursor-pointer" onClick={() => setSelEmpId(e.id)}><span className="text-xs px-2 py-0.5 rounded" style={{ background: col+'15', color: col }}>{e.dept}</span></td>
+                          {/* 총 연차 — 클릭하면 인라인 편집 */}
+                          <td className="px-4 py-3">
+                            {isEditingThis ? (
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="number" step="0.5" min="0"
+                                  value={editTotalVal}
+                                  onChange={ev => setEditTotalVal(ev.target.value)}
+                                  onKeyDown={ev => { if (ev.key==='Enter') saveTotal(e.id); if (ev.key==='Escape') setEditingTotal(null) }}
+                                  autoFocus
+                                  className="w-16 border border-blue-400 rounded-lg px-2 py-1 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-300"
+                                />
+                                <button onClick={() => saveTotal(e.id)} className="text-xs bg-blue-600 text-white px-2 py-1 rounded-lg font-semibold">저장</button>
+                                <button onClick={() => setEditingTotal(null)} className="text-xs text-slate-500 px-1 py-1">✕</button>
+                              </div>
+                            ) : (
+                              <button onClick={() => startEditTotal(e.id, info.total)}
+                                className="font-bold text-sm text-slate-700 hover:text-blue-600 hover:underline">
+                                {info.total}일 ✎
+                              </button>
+                            )}
+                          </td>
                           <td className="px-4 py-3 font-bold text-amber-600 text-sm">{info.used.toFixed(1)}일</td>
                           <td className={`px-4 py-3 font-bold text-sm ${info.remain < 3 ? 'text-red-600':'text-green-600'}`}>{info.remain.toFixed(1)}일</td>
                           <td className="px-4 py-3">
