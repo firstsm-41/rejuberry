@@ -31,6 +31,7 @@ export default function Employees() {
     open: false, emp: EMPTY_EMP, isEdit: false
   })
   const [filter, setFilter] = useState({ search: '', dept: 'all', status: 'active' })
+  const [showSalary, setShowSalary] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -122,7 +123,14 @@ export default function Employees() {
             <option value="retired">퇴사</option>
             <option value="all">전체</option>
           </select>
-          <span className="text-sm text-slate-400 ml-auto">{filtered.length}명</span>
+          {canViewSensitive && (
+            <label className="flex items-center gap-1.5 cursor-pointer select-none ml-auto">
+              <input type="checkbox" checked={showSalary} onChange={e => setShowSalary(e.target.checked)}
+                className="w-4 h-4 accent-blue-600" />
+              <span className="text-sm text-slate-600 font-medium">급여 보기</span>
+            </label>
+          )}
+          <span className="text-sm text-slate-400 ml-2">{filtered.length}명</span>
         </div>
 
         {/* Table */}
@@ -158,7 +166,12 @@ export default function Employees() {
                       <td className="px-4 py-3 text-sm text-slate-500">{e.email || '-'}</td>
                       <td className="px-4 py-3 text-sm text-slate-500">{e.start_date}</td>
                       {canViewSensitive && (
-                        <td className="px-4 py-3 text-sm text-slate-600 font-medium">{e.salary || '-'}</td>
+                        <td className="px-4 py-3 text-sm font-medium">
+                          {showSalary
+                            ? <span className="text-slate-600">{e.salary || '-'}</span>
+                            : <span className="text-slate-400 tracking-widest">{e.salary ? '●●●●●' : '-'}</span>
+                          }
+                        </td>
                       )}
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${e.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
