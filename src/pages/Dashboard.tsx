@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../store/useAuth'
-import type { Employee, LeaveRequest, HrChange } from '../types/database'
+import type { Employee, LeaveRequest } from '../types/database'
 import PageHeader from '../components/PageHeader'
 
 const DEPT_COLORS: Record<string, string> = {
@@ -19,11 +19,10 @@ const STATUS_CFG: Record<string, { label: string; bg: string; color: string }> =
 }
 
 export default function Dashboard() {
-  const { profile } = useAuth()
+  useAuth()
   const [employees, setEmployees] = useState<Employee[]>([])
   const [todaySchedule, setTodaySchedule] = useState<Record<string, string>>({})
   const [pendingLeaves, setPendingLeaves] = useState<LeaveRequest[]>([])
-  const [recentChanges, setRecentChanges] = useState<HrChange[]>([])
   const [loading, setLoading] = useState(true)
 
   const now = new Date()
@@ -31,18 +30,16 @@ export default function Dashboard() {
 
   useEffect(() => {
     const load = async () => {
-      const [empsRes, schedRes, leavesRes, changesRes] = await Promise.all([
+      const [empsRes, schedRes, leavesRes] = await Promise.all([
         supabase.from('employees').select('*').eq('status', 'active'),
         supabase.from('schedules').select('employee_id,status').eq('year', todayY).eq('month', todayM).eq('day', todayD),
         supabase.from('leave_requests').select('*').eq('status', 'pending').order('created_at', { ascending: false }).limit(5),
-        supabase.from('hr_changes').select('*').order('created_at', { ascending: false }).limit(5),
       ])
       setEmployees(empsRes.data || [])
       const map: Record<string, string> = {}
-      ;(schedRes.data || []).forEach(r => { map[r.employee_id] = r.status })
+      ;(schedRes.data || []).forEach((r: { employee_id: string; status: string }) => { map[r.employee_id] = r.status })
       setTodaySchedule(map)
       setPendingLeaves(leavesRes.data || [])
-      setRecentChanges(changesRes.data || [])
       setLoading(false)
     }
     load()
@@ -50,7 +47,6 @@ export default function Dashboard() {
 
   const onDuty = employees.filter(e => ['D','S'].includes(todaySchedule[e.id] || ''))
   const onLeave = employees.filter(e => todaySchedule[e.id] === 'Y')
-  const onOff = employees.filter(e => todaySchedule[e.id] === 'OFF')
 
   const deptCount: Record<string, number> = {}
   employees.forEach(e => { deptCount[e.dept] = (deptCount[e.dept] || 0) + 1 })

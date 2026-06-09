@@ -76,24 +76,31 @@ create table leave_data (
 create table leave_entries (
   id          bigint generated always as identity primary key,
   employee_id text not null references employees(id) on delete cascade,
-  date        date not null,
-  days        numeric(3,1) not null default 1,  -- 반차=0.5
+  year        int  not null,
+  start_date  date not null,
+  end_date    date not null,
+  days        numeric(3,1) not null default 1,
+  type        text not null default 'Y' check (type in ('Y','H')),
   note        text,
   created_at  timestamptz default now()
 );
 
 -- ── leave_requests (연차 신청) ─────────────────────────────────
 create table leave_requests (
-  id           bigint generated always as identity primary key,
-  employee_id  text not null references employees(id) on delete cascade,
-  start_date   date not null,
-  end_date     date not null,
-  days         numeric(4,1) not null,           -- 반차=0.5
-  reason       text,
-  status       text not null default 'pending' check (status in ('pending','approved','rejected')),
-  note         text,
-  created_at   timestamptz default now(),
-  updated_at   timestamptz default now()
+  id              bigint generated always as identity primary key,
+  employee_id     text not null references employees(id) on delete cascade,
+  requester_id    uuid references auth.users(id),
+  start_date      date not null,
+  end_date        date not null,
+  days            numeric(4,1) not null,
+  type            text not null default 'Y' check (type in ('Y','H')),
+  reason          text,
+  status          text not null default 'pending' check (status in ('pending','approved','rejected')),
+  rejected_reason text,
+  approved_by     uuid references auth.users(id),
+  note            text,
+  created_at      timestamptz default now(),
+  updated_at      timestamptz default now()
 );
 
 -- ── Updated_at 자동 갱신 트리거 ────────────────────────────────

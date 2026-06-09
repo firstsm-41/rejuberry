@@ -29,7 +29,6 @@ export default function Leave() {
   const [year, setYear] = useState(curYear)
   const [loading, setLoading] = useState(true)
   const [reqModal, setReqModal] = useState(false)
-  const [addModal, setAddModal] = useState(false)
 
   const load = useCallback(async () => {
     const [empsRes, ldRes, leRes, reqRes] = await Promise.all([
@@ -40,10 +39,10 @@ export default function Leave() {
     ])
     setEmployees(empsRes.data || [])
     const ldMap: Record<string, LeaveData> = {}
-    ;(ldRes.data || []).forEach(d => { ldMap[d.employee_id] = d })
+    ;(ldRes.data as LeaveData[] || []).forEach(d => { ldMap[d.employee_id] = d })
     setLeaveData(ldMap)
     const leMap: Record<string, LeaveEntry[]> = {}
-    ;(leRes.data || []).forEach(e => {
+    ;(leRes.data as LeaveEntry[] || []).forEach(e => {
       if (!leMap[e.employee_id]) leMap[e.employee_id] = []
       leMap[e.employee_id].push(e)
     })
@@ -134,7 +133,7 @@ export default function Leave() {
                 {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}년</option>)}
               </select>
               {selEmpId && canEdit && (
-                <button onClick={() => setAddModal(true)} className="ml-auto bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg text-sm font-semibold">직접 추가</button>
+                <button className="ml-auto bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg text-sm font-semibold">직접 추가</button>
               )}
             </div>
 

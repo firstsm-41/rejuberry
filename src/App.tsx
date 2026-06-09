@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import type { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { useAuth } from './store/useAuth'
 import Layout from './components/Layout'
@@ -29,7 +30,7 @@ export default function App() {
 
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
       setSession(session)
       if (session?.user) {
         loadProfile(session.user.id)
@@ -39,7 +40,7 @@ export default function App() {
     })
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: string, session: Session | null) => {
       setSession(session)
       if (session?.user) {
         loadProfile(session.user.id)
