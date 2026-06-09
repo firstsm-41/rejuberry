@@ -101,9 +101,9 @@ export default function Dashboard() {
   // 오늘 상태별
   const mainEmps  = employees.filter(e => !EXTRA_DEPTS.includes(e.dept))
   const extraEmps = employees.filter(e => EXTRA_DEPTS.includes(e.dept))
-  const onDuty    = mainEmps.filter(e => ['D','S'].includes(todaySchedule[e.id] || ''))
+  const onDuty    = mainEmps.filter(e => ['D','S','H'].includes(todaySchedule[e.id] || ''))
   const onOff     = mainEmps.filter(e => todaySchedule[e.id] === 'OFF')
-  const onLeave   = mainEmps.filter(e => ['Y','H'].includes(todaySchedule[e.id] || ''))
+  const onLeave   = mainEmps.filter(e => todaySchedule[e.id] === 'Y')
 
   // 생일
   const todayMM = String(todayM).padStart(2,'0'), todayDD = String(todayD).padStart(2,'0')
@@ -148,11 +148,11 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* 오늘 근무 */}
+          {/* 오늘 근무 (근무자 + 반차 포함) */}
           <div className="bg-white rounded-2xl border border-slate-200 px-4 py-4 flex items-center gap-3">
             <span className="text-2xl">💼</span>
             <div>
-              <div className="text-xs text-slate-400 mb-0.5">오늘 근무</div>
+              <div className="text-xs text-slate-400 mb-0.5">오늘 근무·반차</div>
               <div className="text-2xl font-bold text-blue-600">
                 {onDuty.length}<span className="text-sm font-normal text-slate-400 ml-0.5">명</span>
               </div>
@@ -163,8 +163,8 @@ export default function Dashboard() {
           <HoverCard label="휴무" count={onOff.length} unit="명"
             emps={onOff} colorClass="text-red-500" icon="🔴" />
 
-          {/* 연차/반차 (hover 명단) */}
-          <HoverCard label="연차/반차" count={onLeave.length} unit="명"
+          {/* 연차 (hover 명단) */}
+          <HoverCard label="연차" count={onLeave.length} unit="명"
             emps={onLeave} colorClass="text-amber-600" icon="📅" />
 
           {/* 마케팅/미분류 (인원만, 근무표 무관) */}
