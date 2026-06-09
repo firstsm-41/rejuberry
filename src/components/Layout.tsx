@@ -11,7 +11,9 @@ const ICON = {
   admin:     'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
 }
 
-const managerNav = [
+interface NavItem { to: string; label: string; icon: string; exact?: boolean }
+
+const managerNav: NavItem[] = [
   { to: '/',          label: '대시보드',    icon: ICON.dashboard, exact: true },
   { to: '/employees', label: '직원 명단',   icon: ICON.employees },
   { to: '/schedule',  label: '근무표',      icon: ICON.schedule },
@@ -20,7 +22,7 @@ const managerNav = [
   { to: '/changes',   label: '입퇴사 관리', icon: ICON.changes },
 ]
 
-const staffNav = [
+const staffNav: NavItem[] = [
   { to: '/schedule',  label: '근무표',      icon: ICON.schedule },
   { to: '/leave',     label: '연차 관리',   icon: ICON.leave },
   { to: '/overtime',  label: '오버타임 등록', icon: ICON.overtime },
@@ -61,7 +63,7 @@ export default function Layout() {
             <NavLink
               key={item.to}
               to={item.to}
-              end={'exact' in item ? item.exact : false}
+              end={item.exact ?? false}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer text-sm transition-all ${
                   isActive
