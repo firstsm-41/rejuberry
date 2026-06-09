@@ -11,6 +11,7 @@ import Schedule from './pages/Schedule'
 import Leave from './pages/Leave'
 import Changes from './pages/Changes'
 import Admin from './pages/Admin'
+import Overtime from './pages/Overtime'
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -76,6 +77,7 @@ export default function App() {
           <Route path="employees" element={<Employees />} />
           <Route path="schedule" element={<Schedule />} />
           <Route path="leave" element={<Leave />} />
+          <Route path="overtime" element={<Overtime />} />
           <Route path="changes" element={<Changes />} />
           <Route path="admin" element={<Admin />} />
         </Route>

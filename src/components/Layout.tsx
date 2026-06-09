@@ -1,17 +1,37 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../store/useAuth'
 
-const navItems = [
-  { to: '/',          label: '대시보드',    icon: 'M3 3h7v7H3zm11 0h7v7h-7zM3 14h7v7H3zm11 0h7v7h-7z', exact: true },
-  { to: '/employees', label: '직원 명단',   icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M23 21v-2a4 4 0 0 0-3-3.87M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM16 3.13a4 4 0 0 1 0 7.75' },
-  { to: '/schedule',  label: '근무표',      icon: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z' },
-  { to: '/leave',     label: '연차 관리',   icon: 'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 12h6M9 16h4' },
-  { to: '/changes',   label: '입퇴사 관리', icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M12 18v-6M9 15h6' },
+const ICON = {
+  dashboard: 'M3 3h7v7H3zm11 0h7v7h-7zM3 14h7v7H3zm11 0h7v7h-7z',
+  employees: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M23 21v-2a4 4 0 0 0-3-3.87M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM16 3.13a4 4 0 0 1 0 7.75',
+  schedule:  'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
+  leave:     'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 12h6M9 16h4',
+  overtime:  'M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zM12 6v6l4 2',
+  changes:   'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M12 18v-6M9 15h6',
+  admin:     'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+}
+
+const managerNav = [
+  { to: '/',          label: '대시보드',    icon: ICON.dashboard, exact: true },
+  { to: '/employees', label: '직원 명단',   icon: ICON.employees },
+  { to: '/schedule',  label: '근무표',      icon: ICON.schedule },
+  { to: '/leave',     label: '연차 관리',   icon: ICON.leave },
+  { to: '/overtime',  label: '오버타임 확인', icon: ICON.overtime },
+  { to: '/changes',   label: '입퇴사 관리', icon: ICON.changes },
+]
+
+const staffNav = [
+  { to: '/schedule',  label: '근무표',      icon: ICON.schedule },
+  { to: '/leave',     label: '연차 관리',   icon: ICON.leave },
+  { to: '/overtime',  label: '오버타임 등록', icon: ICON.overtime },
 ]
 
 export default function Layout() {
   const { profile, signOut } = useAuth()
   const navigate = useNavigate()
+  const level = profile?.level ?? 2
+
+  const navItems = level <= 1 ? managerNav : staffNav
 
   const handleSignOut = async () => {
     await signOut()
@@ -41,7 +61,7 @@ export default function Layout() {
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.exact}
+              end={'exact' in item ? item.exact : false}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer text-sm transition-all ${
                   isActive
@@ -58,7 +78,7 @@ export default function Layout() {
           ))}
 
           {/* Admin only */}
-          {profile?.level === 0 && (
+          {level === 0 && (
             <NavLink
               to="/admin"
               className={({ isActive }) =>
@@ -68,7 +88,7 @@ export default function Layout() {
               }
             >
               <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className="flex-shrink-0">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                <path d={ICON.admin} />
               </svg>
               시스템 관리
             </NavLink>
@@ -84,7 +104,7 @@ export default function Layout() {
             <div className="flex-1 min-w-0">
               <div className="text-slate-200 text-xs font-semibold truncate">{profile?.name || '사용자'}</div>
               <div className="text-slate-500 text-xs">
-                {profile?.level === 0 ? 'ADMIN' : profile?.level === 1 ? '운영자' : '직원'}
+                {level === 0 ? 'ADMIN' : level === 1 ? '운영자' : '직원'}
               </div>
             </div>
           </div>
@@ -97,7 +117,7 @@ export default function Layout() {
         </div>
       </aside>
 
-      {/* Main content */}
+      {/* Main */}
       <main className="flex-1 overflow-auto">
         <Outlet />
       </main>

@@ -72,6 +72,16 @@ export interface LeaveRequest {
   employees?: { name: string; dept: string; position: string } | null
 }
 
+export interface OvertimeEntry {
+  id: number
+  employee_id: string
+  date: string
+  hours: number
+  type: 'earn' | 'use'
+  note: string | null
+  created_at?: string
+}
+
 export interface HrChange {
   id: number
   employee_id: string
