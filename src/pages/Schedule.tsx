@@ -40,8 +40,9 @@ export default function Schedule() {
   const [schMap, setSchMap]     = useState<SchMap>({})
   const [loading, setLoading]   = useState(true)
   const [selectedDay, setSelectedDay] = useState<number | null>(null)
-  const [picker, setPicker]     = useState<{ x:number; y:number; empId:string; day:number } | null>(null)
+  const [picker, setPicker]       = useState<{ x:number; y:number; empId:string; day:number } | null>(null)
   const [swapModal, setSwapModal] = useState<{ empId:string; day:number } | null>(null)
+  const [createModal, setCreateModal] = useState(false)
   const pickerRef = useRef<HTMLDivElement>(null)
   const tableContainerRef = useRef<HTMLDivElement>(null)
 
@@ -312,6 +313,21 @@ export default function Schedule() {
           }
         </div>
 
+        {/* 근무표 없을 때 생성 배너 */}
+        {!loading && canEdit && Object.keys(schMap).length === 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-4">
+            <div className="text-2xl">📋</div>
+            <div className="flex-1">
+              <div className="font-bold text-amber-800 text-sm">{year}년 {month}월 근무표가 없습니다</div>
+              <div className="text-xs text-amber-600 mt-0.5">승인된 연차/반차를 불러와 근무표를 생성할 수 있습니다</div>
+            </div>
+            <button onClick={() => setCreateModal(true)}
+              className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap">
+              근무표 생성하기
+            </button>
+          </div>
+        )}
+
         {/* Team summary (클릭한 날짜 기준) */}
         <div className="bg-white rounded-2xl border border-slate-200 p-4">
           <div className="text-xs font-bold text-slate-500 mb-3">
@@ -538,6 +554,15 @@ export default function Schedule() {
         </div>
       )}
 
+      {/* Schedule Create Modal */}
+      {createModal && (
+        <ScheduleCreateModal
+          year={year} month={month} employees={employees}
+          onClose={() => setCreateModal(false)}
+          onCreated={() => { setCreateModal(false); load() }}
+        />
+      )}
+
       {/* Swap Modal (level 2) */}
       {swapModal && (
         <SwapModal
@@ -627,6 +652,145 @@ function SwapModal({ empId, day, year, month, employees, schMap, onClose, onSwap
           <button onClick={handleSwap} disabled={saving || !targetId || sameTeam.length === 0}
             className="bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-semibold">
             {saving ? '교환 중...' : '교환하기'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+// ─── Schedule Create Modal ────────────────────────────────────────────────────
+interface ScheduleCreateModalProps {
+  year: number; month: number
+  employees: Employee[]
+  onClose: () => void; onCreated: () => void
+}
+
+function ScheduleCreateModal({ year, month, employees, onClose, onCreated }: ScheduleCreateModalProps) {
+  const [loading, setLoading]   = useState(true)
+  const [leaveItems, setLeaveItems] = useState<Array<{ empId: string; day: number; type: string }>>([])
+  const [creating, setCreating] = useState(false)
+
+  useEffect(() => {
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const startDate = `${year}-${pad(month)}-01`
+    const endDate   = `${year}-${pad(month)}-31`
+    supabase.from('leave_entries')
+      .select('*')
+      .lte('start_date', endDate)
+      .gte('end_date', startDate)
+      .then(({ data }) => {
+        const expanded: Array<{ empId: string; day: number; type: string }> = []
+        for (const entry of (data || [])) {
+          const s = new Date(entry.start_date), e = new Date(entry.end_date)
+          for (const dt = new Date(s); dt <= e; dt.setDate(dt.getDate() + 1)) {
+            if (dt.getFullYear() === year && dt.getMonth() + 1 === month) {
+              expanded.push({ empId: entry.employee_id, day: dt.getDate(), type: entry.type })
+            }
+          }
+        }
+        setLeaveItems(expanded)
+        setLoading(false)
+      })
+  }, [year, month])
+
+  // day → [{empId, type, name, dept}]
+  const byDay: Record<number, Array<{ empId:string; type:string; name:string; dept:string }>> = {}
+  for (const item of leaveItems) {
+    if (!byDay[item.day]) byDay[item.day] = []
+    const emp = employees.find(e => e.id === item.empId)
+    byDay[item.day].push({ ...item, name: emp?.name || item.empId, dept: emp?.dept || '' })
+  }
+
+  const hasConflict = (day: number) => {
+    const entries = byDay[day] || []
+    const counts: Record<string, number> = {}
+    entries.forEach(e => { counts[e.dept] = (counts[e.dept] || 0) + 1 })
+    return Object.values(counts).some(c => c >= 2)
+  }
+
+  const days = Object.keys(byDay).map(Number).sort((a, b) => a - b)
+  const DAYS_KR = ['일','월','화','수','목','금','토']
+
+  const handleCreate = async () => {
+    setCreating(true)
+    if (leaveItems.length > 0) {
+      const inserts = leaveItems.map(item => ({
+        employee_id: item.empId, year, month, day: item.day, status: item.type,
+      }))
+      await supabase.from('schedules').upsert(inserts, { onConflict: 'employee_id,year,month,day' })
+    }
+    setCreating(false)
+    onCreated()
+  }
+
+  return (
+    <Modal open={true} onClose={onClose} title={`${year}년 ${month}월 근무표 생성`}>
+      <div className="space-y-4">
+        <div className="bg-blue-50 rounded-xl p-3 text-sm text-blue-700">
+          승인된 연차/반차가 스케줄에 반영됩니다. 생성 후 나머지 근무를 직접 입력하세요.
+        </div>
+
+        {loading ? (
+          <div className="text-center py-8 text-slate-400 text-sm">연차 내역 불러오는 중...</div>
+        ) : (
+          <>
+            <div className="text-xs font-bold text-slate-500 flex items-center gap-2">
+              {month}월 등록된 연차/반차
+              <span className="font-normal text-slate-400">({leaveItems.length}건)</span>
+              {days.some(hasConflict) && (
+                <span className="text-orange-500 text-xs">⚠ 팀 2명↑ 중복 있음</span>
+              )}
+            </div>
+
+            {days.length === 0 ? (
+              <div className="bg-slate-50 rounded-xl p-6 text-center text-slate-400 text-sm">
+                등록된 연차/반차 없음<br />
+                <span className="text-xs">빈 근무표가 생성됩니다 (직접 입력해주세요)</span>
+              </div>
+            ) : (
+              <div className="max-h-72 overflow-auto space-y-2 pr-1">
+                {days.map(day => {
+                  const conflict = hasConflict(day)
+                  const entries  = byDay[day]
+                  const dow = DAYS_KR[new Date(year, month - 1, day).getDay()]
+                  // 팀별 2명↑ 목록
+                  const conflictDepts = (() => {
+                    const counts: Record<string, number> = {}
+                    entries.forEach(e => { counts[e.dept] = (counts[e.dept] || 0) + 1 })
+                    return Object.entries(counts).filter(([,c]) => c >= 2).map(([d]) => d)
+                  })()
+                  return (
+                    <div key={day}
+                      className={`p-3 rounded-xl border ${conflict ? 'border-orange-200 bg-orange-50' : 'border-slate-100 bg-slate-50'}`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-sm font-bold text-slate-700">{month}월 {day}일 ({dow})</span>
+                        {conflictDepts.map(d => (
+                          <span key={d} className="text-xs font-bold text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full">
+                            ⚠ {d} 2명↑
+                          </span>
+                        ))}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {entries.map((e, i) => (
+                          <span key={i} className={`text-xs px-2 py-0.5 rounded-full font-semibold ${e.type === 'Y' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {e.name} ({e.type === 'Y' ? '연차' : '반차'})
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </>
+        )}
+
+        <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
+          <button onClick={onClose} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-semibold">취소</button>
+          <button onClick={handleCreate} disabled={creating || loading}
+            className="bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-bold">
+            {creating ? '생성 중...' : '근무표 생성하기'}
           </button>
         </div>
       </div>
