@@ -311,9 +311,11 @@ export default function Schedule() {
   }
 
   const exportImage = async () => {
-    const el = imageSlimRef.current
+    const el = tableContainerRef.current
     if (!el) return
-    el.style.display = 'block'
+    const prev = { maxHeight: el.style.maxHeight, overflow: el.style.overflow }
+    el.style.maxHeight = 'none'
+    el.style.overflow = 'visible'
     await new Promise(r => requestAnimationFrame(r))
     try {
       const canvas = await html2canvas(el, { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' })
@@ -322,7 +324,8 @@ export default function Schedule() {
       link.href = canvas.toDataURL('image/png')
       link.click()
     } finally {
-      el.style.display = 'none'
+      el.style.maxHeight = prev.maxHeight
+      el.style.overflow = prev.overflow
     }
   }
 
