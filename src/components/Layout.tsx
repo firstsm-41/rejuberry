@@ -14,18 +14,20 @@ const ICON = {
 interface NavItem { to: string; label: string; icon: string; exact?: boolean }
 
 const managerNav: NavItem[] = [
-  { to: '/',          label: '대시보드',    icon: ICON.dashboard, exact: true },
-  { to: '/employees', label: '직원 명단',   icon: ICON.employees },
-  { to: '/schedule',  label: '근무표',      icon: ICON.schedule },
-  { to: '/leave',     label: '연차 관리',   icon: ICON.leave },
-  { to: '/overtime',  label: '오버타임 확인', icon: ICON.overtime },
-  { to: '/changes',   label: '입퇴사 관리', icon: ICON.changes },
+  { to: '/',           label: '대시보드',    icon: ICON.dashboard, exact: true },
+  { to: '/employees',  label: '직원 명단',   icon: ICON.employees },
+  { to: '/personnel',  label: '인사관리',    icon: ICON.admin },
+  { to: '/schedule',   label: '근무표',      icon: ICON.schedule },
+  { to: '/leave',      label: '연차 관리',   icon: ICON.leave },
+  { to: '/overtime',   label: '오버타임 확인', icon: ICON.overtime },
+  { to: '/changes',    label: '입퇴사 관리', icon: ICON.changes },
 ]
 
 const staffNav: NavItem[] = [
-  { to: '/schedule',  label: '근무표',      icon: ICON.schedule },
-  { to: '/leave',     label: '연차 관리',   icon: ICON.leave },
-  { to: '/overtime',  label: '오버타임 등록', icon: ICON.overtime },
+  { to: '/employees',  label: '직원 명단',   icon: ICON.employees },
+  { to: '/schedule',   label: '근무표',      icon: ICON.schedule },
+  { to: '/leave',      label: '연차 관리',   icon: ICON.leave },
+  { to: '/overtime',   label: '오버타임 등록', icon: ICON.overtime },
 ]
 
 export default function Layout() {
