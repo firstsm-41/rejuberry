@@ -96,35 +96,21 @@ export default function Login() {
 
     setRegLoading(true)
 
-    // 계정 생성
-    const { data: authData, error: signUpErr } = await supabase.auth.signUp({
+    // 계정 생성 — options.data 에 직원 정보를 담으면 DB trigger가 profiles 자동 생성
+    const { error: signUpErr } = await supabase.auth.signUp({
       email: regEmail,
       password: regPassword,
+      options: {
+        data: {
+          name:        verifiedEmp.emp_name,
+          level:       verifiedEmp.emp_level,
+          employee_id: verifiedEmp.employee_id,
+        },
+      },
     })
 
     if (signUpErr) {
       setRegError(signUpErr.message.includes('already') ? '이미 사용 중인 이메일입니다.' : signUpErr.message)
-      setRegLoading(false)
-      return
-    }
-
-    const userId = authData.user?.id
-    if (!userId) {
-      setRegError('계정 생성에 실패했습니다. 다시 시도해주세요.')
-      setRegLoading(false)
-      return
-    }
-
-    // 프로필 생성
-    const { error: profileErr } = await supabase.from('profiles').insert({
-      id:          userId,
-      name:        verifiedEmp.emp_name,
-      level:       verifiedEmp.emp_level,
-      employee_id: verifiedEmp.employee_id,
-    })
-
-    if (profileErr) {
-      setRegError('프로필 설정에 실패했습니다. 관리자에게 문의하세요.')
       setRegLoading(false)
       return
     }
