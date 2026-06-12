@@ -17,12 +17,14 @@ const MANAGER_OT_GROUPS = [
 ]
 
 const fmtMin = (min: number) => {
-  if (min <= 0) return '0분'
-  const h = Math.floor(min / 60)
-  const m = min % 60
-  if (h === 0) return `${m}분`
-  if (m === 0) return `${h}시간`
-  return `${h}시간 ${m}분`
+  if (min === 0) return '0분'
+  const sign = min < 0 ? '-' : ''
+  const abs  = Math.abs(min)
+  const h = Math.floor(abs / 60)
+  const m = abs % 60
+  if (h === 0) return `${sign}${m}분`
+  if (m === 0) return `${sign}${h}시간`
+  return `${sign}${h}시간 ${m}분`
 }
 
 const DEPT_COLORS: Record<string, string> = {
@@ -64,8 +66,8 @@ function ManagerView({ selEmpDefault }: { selEmpDefault: string }) {
 
   const getBalance = (empId: string) => {
     const es = entries.filter(e => e.employee_id === empId)
-    const earned = es.filter(e => e.type === 'earn').reduce((s, e) => s + e.hours, 0)
-    const used   = es.filter(e => e.type === 'use').reduce((s, e) => s + e.hours, 0)
+    const earned = es.filter(e => e.type === 'earn').reduce((s, e) => s + Number(e.hours), 0)
+    const used   = es.filter(e => e.type === 'use').reduce((s, e) => s + Number(e.hours), 0)
     return { earned, used, remain: earned - used }
   }
 
@@ -201,8 +203,8 @@ function StaffView({ empId }: { empId: string }) {
 
   useEffect(() => { load() }, [load])
 
-  const earned = entries.filter(e => e.type === 'earn').reduce((s, e) => s + e.hours, 0)
-  const used   = entries.filter(e => e.type === 'use').reduce((s, e) => s + e.hours, 0)
+  const earned = entries.filter(e => e.type === 'earn').reduce((s, e) => s + Number(e.hours), 0)
+  const used   = entries.filter(e => e.type === 'use').reduce((s, e) => s + Number(e.hours), 0)
   const remain = earned - used
 
   const handleSubmit = async (e: React.FormEvent) => {
