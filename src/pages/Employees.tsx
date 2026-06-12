@@ -22,7 +22,7 @@ export default function Employees() {
       .select('id,name,dept,position,status,start_date,phone')
       .eq('status', 'active')
       .order('id')
-      .then(({ data }) => { setEmployees((data as Employee[]) || []); setLoading(false) })
+      .then(({ data }: { data: Employee[] | null }) => { setEmployees(data || []); setLoading(false) })
   }, [])
 
   const filtered = search
