@@ -17,18 +17,17 @@ const STATUS_CFG: Record<string, { label:string; bg:string; color:string }> = {
   OFF: { label:'휴무', bg:'#fecaca', color:'#0f172a' },
 }
 
-// 표시할 팀 그룹 (마케팅/미분류 제외)
 const TEAM_GROUPS = [
-  { label:'진료진',     depts:['대표원장','부원장'],    color:'#1d4ed8' },
-  { label:'실장',       depts:['총괄실장','실장'],       color:'#7c3aed' },
-  { label:'코디',       depts:['코디'],                  color:'#0369a1' },
-  { label:'간호',       depts:['간호'],                  color:'#047857' },
-  { label:'피부1(시술)',depts:['피부1(시술)'],            color:'#9d174d' },
-  { label:'피부2(관리)',depts:['피부2(관리)'],            color:'#92400e' },
+  { label:'진료진',      depts:['대표원장','부원장'],   color:'#1d4ed8' },
+  { label:'실장',        depts:['총괄실장','실장'],      color:'#7c3aed' },
+  { label:'코디',        depts:['코디'],                 color:'#0369a1' },
+  { label:'간호',        depts:['간호'],                 color:'#047857' },
+  { label:'피부1(시술)', depts:['피부1(시술)'],          color:'#9d174d' },
+  { label:'피부2(관리)', depts:['피부2(관리)'],          color:'#92400e' },
+  { label:'마케팅',      depts:['마케팅'],               color:'#0f766e' },
 ]
 const EXTRA_DEPTS = ['마케팅','미분류']
 
-// 호버 툴팁 카드
 function HoverCard({
   label, count, unit, emps, colorClass, icon,
 }: {
@@ -45,9 +44,7 @@ function HoverCard({
             {count}<span className="text-sm font-normal text-slate-400 ml-0.5">{unit}</span>
           </div>
         </div>
-        {emps.length > 0 && (
-          <span className="ml-auto text-slate-300 text-xs">▾</span>
-        )}
+        {emps.length > 0 && <span className="ml-auto text-slate-300 text-xs">▾</span>}
       </div>
       {emps.length > 0 && (
         <div className="invisible opacity-0 group-hover:visible group-hover:opacity-100
@@ -75,7 +72,7 @@ export default function Dashboard() {
   const [todaySchedule, setTodaySchedule] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
 
-  const now   = new Date()
+  const now    = new Date()
   const todayY = now.getFullYear(), todayM = now.getMonth() + 1, todayD = now.getDate()
   const todayStr = `${todayY}년 ${todayM}월 ${todayD}일 (${DAYS_KR[now.getDay()]})`
 
@@ -97,14 +94,12 @@ export default function Dashboard() {
     load()
   }, [])
 
-  // 오늘 상태별
   const mainEmps  = employees.filter(e => !EXTRA_DEPTS.includes(e.dept))
   const extraEmps = employees.filter(e => EXTRA_DEPTS.includes(e.dept))
   const onDuty    = mainEmps.filter(e => ['D','S','H'].includes(todaySchedule[e.id] || ''))
   const onOff     = mainEmps.filter(e => todaySchedule[e.id] === 'OFF')
   const onLeave   = mainEmps.filter(e => todaySchedule[e.id] === 'Y')
 
-  // 생일
   const todayMM = String(todayM).padStart(2,'0'), todayDD = String(todayD).padStart(2,'0')
   const birthdayEmps = employees.filter(e => {
     if (!e.birth_date) return false
@@ -135,7 +130,6 @@ export default function Dashboard() {
 
         {/* 상단 요약 카드 */}
         <div className="grid grid-cols-5 gap-3">
-          {/* 총 재직 인원 */}
           <div className="bg-white rounded-2xl border border-slate-200 px-4 py-4 flex items-center gap-3">
             <span className="text-2xl">👥</span>
             <div>
@@ -146,7 +140,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* 오늘 근무 (근무자 + 반차 포함) */}
           <div className="bg-white rounded-2xl border border-slate-200 px-4 py-4 flex items-center gap-3">
             <span className="text-2xl">💼</span>
             <div>
@@ -157,15 +150,12 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* 휴무 (hover 명단) */}
           <HoverCard label="휴무" count={onOff.length} unit="명"
             emps={onOff} colorClass="text-red-500" icon="🔴" />
 
-          {/* 연차 (hover 명단) */}
           <HoverCard label="연차" count={onLeave.length} unit="명"
             emps={onLeave} colorClass="text-amber-600" icon="📅" />
 
-          {/* 마케팅/미분류 (인원만, 근무표 무관) */}
           <div className="bg-white rounded-2xl border border-slate-200 px-4 py-4 flex items-center gap-3">
             <span className="text-2xl">📌</span>
             <div>
@@ -177,7 +167,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* 오늘 근무표 */}
+        {/* 오늘 근무표 — 리스트 형식 */}
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
           <div className="px-5 py-3.5 border-b border-slate-100 flex items-center gap-3">
             <span className="font-bold text-slate-800">오늘 근무표</span>
@@ -187,63 +177,42 @@ export default function Dashboard() {
             )}
           </div>
 
-          <div className="p-4 grid grid-cols-3 gap-3">
+          <div className="divide-y divide-slate-50">
             {TEAM_GROUPS.map(group => {
-              const col  = group.color
               const emps = employees.filter(e => group.depts.includes(e.dept))
               if (emps.length === 0) return null
-
-              // OFF 제외, 근무(D/S)/연차(Y)/반차(H)만
-              const visible = emps.filter(e => todaySchedule[e.id] !== 'OFF')
-              const workCount = emps.filter(e => ['D','S'].includes(todaySchedule[e.id] || '')).length
-
-              // 상태별 그룹
-              const byStatus: Record<string, Employee[]> = { D:[], S:[], Y:[], H:[], '':[] }
-              visible.forEach(e => {
-                const st = todaySchedule[e.id] || ''
-                if (byStatus[st]) byStatus[st].push(e)
-                else byStatus[''].push(e)
-              })
-
-              const rows = [
-                { key:'D',  cfg: STATUS_CFG['D'],   list: byStatus['D'] },
-                { key:'S',  cfg: STATUS_CFG['S'],   list: byStatus['S'] },
-                { key:'Y',  cfg: STATUS_CFG['Y'],   list: byStatus['Y'] },
-                { key:'H',  cfg: STATUS_CFG['H'],   list: byStatus['H'] },
-                // 미등록 제거 (표시 안 함)
-              ].filter(r => r.list.length > 0)
-
+              const col = group.color
+              const workCnt = emps.filter(e => ['D','S'].includes(todaySchedule[e.id] || '')).length
               return (
-                <div key={group.label} className="rounded-2xl border p-3.5"
-                  style={{ borderColor: col + '40', background: col + '08' }}>
+                <div key={group.label}>
                   {/* 팀 헤더 */}
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: col }} />
-                    <span className="text-sm font-bold" style={{ color: col }}>{group.label}</span>
-                    <span className="ml-auto text-xs font-bold text-slate-500">
-                      근무 <span style={{ color: col }}>{workCount}</span>/{emps.length}명
+                  <div className="px-5 py-2 flex items-center gap-2" style={{ background: col + '0d' }}>
+                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: col }} />
+                    <span className="text-xs font-bold" style={{ color: col }}>{group.label}</span>
+                    <span className="text-xs text-slate-400 ml-auto">
+                      근무 <span style={{ color: col }} className="font-bold">{workCnt}</span>/{emps.length}명
                     </span>
                   </div>
-
-                  {/* 상태별 명단 */}
-                  <div className="space-y-2">
-                    {rows.map(({ key, cfg, list }) => (
-                      <div key={key} className="flex items-start gap-2">
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 mt-0.5"
-                          style={{ background: cfg.bg, color: cfg.color }}>
-                          {cfg.label}
-                        </span>
-                        <div className="flex flex-wrap gap-1">
-                          {list.map(e => (
-                            <span key={e.id}
-                              className="text-xs text-slate-600 bg-white border border-slate-100 px-2 py-0.5 rounded-full font-medium">
-                              {e.name}
-                            </span>
-                          ))}
-                        </div>
+                  {/* 직원 행 */}
+                  {emps.map(e => {
+                    const st = todaySchedule[e.id] || ''
+                    const cfg = STATUS_CFG[st]
+                    return (
+                      <div key={e.id} className="px-5 py-2.5 flex items-center gap-3 hover:bg-slate-50/70 transition-colors">
+                        <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                          style={{ background: col + 'bb' }}>{e.name[0]}</div>
+                        <span className="text-sm font-medium text-slate-700 w-16 flex-shrink-0">{e.name}</span>
+                        <span className="text-xs text-slate-400 flex-1">{e.position}</span>
+                        {st && cfg ? (
+                          <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ background: cfg.bg, color: cfg.color }}>
+                            {cfg.label}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-300">—</span>
+                        )}
                       </div>
-                    ))}
-                  </div>
+                    )
+                  })}
                 </div>
               )
             })}

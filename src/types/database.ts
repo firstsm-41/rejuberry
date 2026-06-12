@@ -50,6 +50,7 @@ export interface LeaveEntry {
   end_date: string
   days: number
   type: 'Y' | 'H'
+  half_day?: 'AM' | 'PM' | null
   note: string | null
   created_at?: string
 }

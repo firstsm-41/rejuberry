@@ -50,6 +50,7 @@ export default function Schedule() {
     '실장': 1, '코디': 1, '간호': 1, '피부1(시술)': 1, '피부2(관리)': 1,
   })
   const [showQuotaSettings, setShowQuotaSettings] = useState(false)
+  const [showNotice, setShowNotice] = useState(true)
   const pickerRef        = useRef<HTMLDivElement>(null)
   const tableContainerRef = useRef<HTMLDivElement>(null)
 
@@ -200,7 +201,7 @@ export default function Schedule() {
     for (let d = 1; d <= dim; d++) {
       const viols: {dept:string; names:string[]}[] = []
       for (const [dept, max] of Object.entries(offQuotas)) {
-        const offEmps = employees.filter(e => e.dept === dept && (schMap[e.id]?.[d] || '') === 'OFF')
+        const offEmps = employees.filter(e => e.dept === dept && (schMap[e.id]?.[d] || '') === 'Y')
         if (offEmps.length > max) viols.push({ dept, names: offEmps.map(e => e.name) })
       }
       if (viols.length) res[d] = viols
@@ -361,27 +362,31 @@ export default function Schedule() {
   }
 
   const exportImage = async () => {
-    const el = tableContainerRef.current
-    if (!el) return
-    const prevMaxH = el.style.maxHeight
-    el.style.maxHeight = 'none'
-    document.body.classList.add('capturing')
-    el.scrollTop = 0; el.scrollLeft = 0
-    await new Promise(r => setTimeout(r, 300))
-    const fullW = el.scrollWidth, fullH = el.scrollHeight
+    const container = tableContainerRef.current
+    if (!container) return
+    const table = container.querySelector('table')
+    if (!table) return
+
+    const wrapper = document.createElement('div')
+    wrapper.style.cssText = 'position:fixed;left:-99999px;top:0;background:#ffffff;padding:16px;width:max-content;z-index:-1'
+    const clone = table.cloneNode(true) as HTMLElement
+    // sticky 포지션 제거 (html2canvas 호환)
+    clone.querySelectorAll('th,td').forEach(el => {
+      (el as HTMLElement).style.position = 'static'
+    })
+    wrapper.appendChild(clone)
+    document.body.appendChild(wrapper)
     try {
-      const canvas = await html2canvas(el, {
-        scale:2, useCORS:true, logging:false, backgroundColor:'#ffffff',
-        scrollX:0, scrollY:0, width:fullW, height:fullH,
-        windowWidth:fullW+50, windowHeight:fullH+50,
+      await new Promise(r => setTimeout(r, 150))
+      const canvas = await html2canvas(wrapper, {
+        scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff',
       })
       const link = document.createElement('a')
       link.download = `근무표_${year}년${month}월.png`
       link.href = canvas.toDataURL('image/png')
       link.click()
     } finally {
-      el.style.maxHeight = prevMaxH
-      document.body.classList.remove('capturing')
+      document.body.removeChild(wrapper)
     }
   }
 
@@ -539,6 +544,32 @@ export default function Schedule() {
             </div>
           )}
         </div>
+
+        {/* 근무표 공지 */}
+        {showNotice && (() => {
+          const availMonths: string[] = []
+          for (let i = 0; i <= 3; i++) {
+            const m = ((todayM - 1 + i) % 12) + 1
+            const y = todayY + Math.floor((todayM - 1 + i) / 12)
+            availMonths.push(`${y !== todayY ? y + '년 ' : ''}${m}월`)
+          }
+          return (
+            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 no-print">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1.5 text-xs text-blue-800">
+                  <div className="font-bold text-sm text-blue-900 mb-2">📌 근무표 안내</div>
+                  <p>• 다음 달 근무표는 매달 <strong>15일경</strong> 나올 예정입니다.</p>
+                  <p>• 오프 신청은 근무표 확정 전(15일까지) 수정 가능하며, 확정 후에는 <strong>개인 간 교환만</strong> 가능합니다.</p>
+                  <p>• 오프 신청 최대 <strong>4개</strong> · 연차는 별도 신청 가능 (오프4 + 연차2 = 총 6개)</p>
+                  <p>• 오프는 <strong>3개월 전 1일 0시</strong>부터 신청 가능합니다.</p>
+                  <p className="text-blue-600 font-semibold">현재 신청 가능한 월: {availMonths.join(', ')}</p>
+                </div>
+                <button onClick={() => setShowNotice(false)}
+                  className="text-blue-400 hover:text-blue-600 text-xl leading-none flex-shrink-0 px-1">×</button>
+              </div>
+            </div>
+          )
+        })()}
 
         {/* 오프 쿼터 설정 패널 (관리자) */}
         {canEdit && showQuotaSettings && (

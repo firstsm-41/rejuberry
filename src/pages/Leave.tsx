@@ -10,7 +10,6 @@ const DEPT_COLORS: Record<string, string> = {
   '피부1(시술)':'#9d174d','피부2(관리)':'#92400e',
 }
 
-// ─── 레벨별 라우팅 ───────────────────────────────────────────────────────────
 export default function Leave() {
   const { profile } = useAuth()
   return (profile?.level ?? 2) <= 1 ? <ManagerView /> : <StaffView />
@@ -26,21 +25,28 @@ function StaffView() {
   const [leaveData, setLeaveData] = useState<LeaveData | null>(null)
   const [entries, setEntries]     = useState<LeaveEntry[]>([])
   const [schedEntries, setSchedEntries] = useState<Array<{month:number; day:number; status:string}>>([])
+  const [confirmedMonths, setConfirmedMonths] = useState<Set<number>>(new Set())
   const [loading, setLoading]     = useState(true)
   const [reqModal, setReqModal]   = useState(false)
 
   const load = useCallback(async () => {
     if (!myEmpId) { setLoading(false); return }
-    const [empRes, ldRes, leRes, schRes] = await Promise.all([
+    const [empRes, ldRes, leRes, schRes, confRes] = await Promise.all([
       supabase.from('employees').select('*').eq('id', myEmpId).single(),
       supabase.from('leave_data').select('*').eq('employee_id', myEmpId).eq('year', year).single(),
       supabase.from('leave_entries').select('*').eq('employee_id', myEmpId).eq('year', year).order('start_date'),
       supabase.from('schedules').select('month,day,status').eq('employee_id', myEmpId).eq('year', year).in('status', ['Y','H']),
+      supabase.from('schedule_confirmed').select('month,confirmed_at').eq('year', year),
     ])
     setMyEmp(empRes.data)
     setLeaveData(ldRes.data)
     setEntries((leRes.data as LeaveEntry[]) || [])
     setSchedEntries(schRes.data || [])
+    const confirmed = new Set<number>()
+    ;(confRes.data || []).forEach((r: {month:number; confirmed_at:string|null}) => {
+      if (r.confirmed_at) confirmed.add(r.month)
+    })
+    setConfirmedMonths(confirmed)
     setLoading(false)
   }, [myEmpId, year])
 
@@ -59,6 +65,31 @@ function StaffView() {
   const used    = usedY + usedH * 0.5
   const remain  = total - used
 
+  const canDeleteEntry = (en: LeaveEntry) => {
+    const entryMonth = new Date(en.start_date).getMonth() + 1
+    return !confirmedMonths.has(entryMonth)
+  }
+
+  const handleDeleteEntry = async (id: number) => {
+    if (!confirm('삭제할까요?')) return
+    const entry = entries.find(e => e.id === id)
+    await supabase.from('leave_entries').delete().eq('id', id)
+    if (entry) {
+      const dates: Array<{y:number; m:number; d:number}> = []
+      const s = new Date(entry.start_date), en = new Date(entry.end_date)
+      for (const dt = new Date(s); dt <= en; dt.setDate(dt.getDate() + 1)) {
+        dates.push({ y: dt.getFullYear(), m: dt.getMonth() + 1, d: dt.getDate() })
+      }
+      await Promise.all(dates.map(({ y, m, d }) =>
+        supabase.from('schedules').delete()
+          .eq('employee_id', myEmpId)
+          .eq('year', y).eq('month', m).eq('day', d)
+          .eq('status', entry.type)
+      ))
+    }
+    await load()
+  }
+
   return (
     <div className="flex flex-col h-full overflow-auto">
       <div className="p-6 space-y-5">
@@ -72,9 +103,9 @@ function StaffView() {
         {/* 잔여 현황 */}
         <div className="grid grid-cols-3 gap-4">
           {[
-            { label:'총 연차',  val: total,            unit:'일', color:'text-slate-800' },
-            { label:'사용',     val: used.toFixed(1),  unit:'일', color:'text-amber-600' },
-            { label:'잔여',     val: remain.toFixed(1),unit:'일', color: remain < 3 ? 'text-red-600':'text-green-600' },
+            { label:'총 연차',  val: total,             unit:'일', color:'text-slate-800' },
+            { label:'사용',     val: used.toFixed(1),   unit:'일', color:'text-amber-600' },
+            { label:'잔여',     val: remain.toFixed(1), unit:'일', color: remain < 3 ? 'text-red-600':'text-green-600' },
           ].map(s => (
             <div key={s.label} className="bg-white rounded-2xl border border-slate-200 p-5 text-center">
               <div className="text-xs text-slate-400 mb-1">{s.label}</div>
@@ -87,12 +118,12 @@ function StaffView() {
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100 font-bold text-sm">{year}년 연차 내역</div>
           <table className="w-full border-collapse">
-            <thead><tr>{['시작일','종료일','일수','구분'].map(h => (
+            <thead><tr>{['시작일','종료일','일수','구분','오전/오후','관리'].map(h => (
               <th key={h} className="bg-slate-50 px-4 py-3 text-left text-xs font-bold text-slate-500 border-b border-slate-200">{h}</th>
             ))}</tr></thead>
             <tbody>
               {entries.length === 0 ? (
-                <tr><td colSpan={4} className="text-center text-slate-400 py-10 text-sm">연차 사용 내역 없음</td></tr>
+                <tr><td colSpan={6} className="text-center text-slate-400 py-10 text-sm">연차 사용 내역 없음</td></tr>
               ) : entries.map(en => (
                 <tr key={en.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
                   <td className="px-4 py-3 text-sm">{en.start_date}</td>
@@ -102,6 +133,17 @@ function StaffView() {
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${en.type === 'Y' ? 'bg-green-100 text-green-700':'bg-amber-100 text-amber-700'}`}>
                       {en.type === 'Y' ? '연차':'반차'}
                     </span>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-slate-400">
+                    {en.type === 'H' ? (en.half_day === 'AM' ? '오전' : en.half_day === 'PM' ? '오후' : '—') : '—'}
+                  </td>
+                  <td className="px-4 py-3">
+                    {canDeleteEntry(en) ? (
+                      <button onClick={() => handleDeleteEntry(en.id)}
+                        className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-red-50">삭제</button>
+                    ) : (
+                      <span className="text-xs text-slate-300">확정됨</span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -122,8 +164,9 @@ function StaffView() {
 // ─── 관리자 뷰 (레벨 0/1) ─────────────────────────────────────────────────────
 function ManagerView() {
   const curYear = new Date().getFullYear()
+  const curMonth = new Date().getMonth() + 1
 
-  type Tab = 'summary' | 'history'
+  type Tab = 'summary' | 'history' | 'calendar'
 
   const [tab, setTab]             = useState<Tab>('summary')
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -132,12 +175,11 @@ function ManagerView() {
   const [scheduleY, setScheduleY] = useState<Record<string, Array<{month:number; day:number; status:string}>>>({})
   const [selEmpId, setSelEmpId]   = useState('')
   const [year, setYear]           = useState(curYear)
+  const [calMonth, setCalMonth]   = useState(curMonth)
   const [loading, setLoading]     = useState(true)
   const [reqModal, setReqModal]   = useState(false)
-  // total_days 인라인 편집
   const [editingTotal, setEditingTotal] = useState<string | null>(null)
   const [editTotalVal, setEditTotalVal] = useState('')
-  // 상세보기 모달
   const [detailEmpId, setDetailEmpId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -152,7 +194,6 @@ function ManagerView() {
     ;(ldRes.data as LeaveData[] || []).forEach(d => { ldMap[d.employee_id] = d })
     setLeaveData(ldMap)
     setLeaveEntries((leRes.data as LeaveEntry[]) || [])
-    // schedules Y/H per employee
     const schMap: Record<string, Array<{month:number; day:number; status:string}>> = {}
     ;(schRes.data || []).forEach((r: {employee_id:string; month:number; day:number; status:string}) => {
       if (!schMap[r.employee_id]) schMap[r.employee_id] = []
@@ -178,8 +219,7 @@ function ManagerView() {
   const selInfo = selEmpId ? getLeaveInfo(selEmpId) : null
 
   const startEditTotal = (empId: string, current: number) => {
-    setEditingTotal(empId)
-    setEditTotalVal(String(current))
+    setEditingTotal(empId); setEditTotalVal(String(current))
   }
 
   const saveTotal = async (empId: string) => {
@@ -223,15 +263,16 @@ function ManagerView() {
         {/* Tabs + 연차 신청 버튼 */}
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
-            <TabBtn active={tab === 'summary'} onClick={() => setTab('summary')}>연차 현황</TabBtn>
-            <TabBtn active={tab === 'history'} onClick={() => setTab('history')}>연차 내역</TabBtn>
+            <TabBtn active={tab === 'summary'}  onClick={() => setTab('summary')}>연차 현황</TabBtn>
+            <TabBtn active={tab === 'history'}  onClick={() => setTab('history')}>연차 내역</TabBtn>
+            <TabBtn active={tab === 'calendar'} onClick={() => setTab('calendar')}>달력</TabBtn>
           </div>
           <button onClick={() => setReqModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
             + 연차 등록
           </button>
         </div>
 
-        {tab === 'summary' ? (
+        {tab === 'summary' && (
           <>
             <div className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center gap-3">
               <select value={selEmpId} onChange={e => setSelEmpId(e.target.value)}
@@ -249,10 +290,10 @@ function ManagerView() {
               <>
                 <div className="grid grid-cols-4 gap-4">
                   {[
-                    { label:'총 연차',  val: selInfo.total,                 unit:'일', color:'text-slate-800' },
-                    { label:'사용',     val: selInfo.used.toFixed(1),       unit:'일', color:'text-amber-600' },
-                    { label:'잔여',     val: selInfo.remain.toFixed(1),     unit:'일', color: selInfo.remain < 3 ? 'text-red-600':'text-green-600' },
-                    { label:'사용률',   val: selInfo.total ? Math.round(selInfo.used / selInfo.total * 100) : 0, unit:'%', color:'text-blue-600' },
+                    { label:'총 연차', val: selInfo.total,                 unit:'일', color:'text-slate-800' },
+                    { label:'사용',    val: selInfo.used.toFixed(1),       unit:'일', color:'text-amber-600' },
+                    { label:'잔여',    val: selInfo.remain.toFixed(1),     unit:'일', color: selInfo.remain < 3 ? 'text-red-600':'text-green-600' },
+                    { label:'사용률',  val: selInfo.total ? Math.round(selInfo.used / selInfo.total * 100) : 0, unit:'%', color:'text-blue-600' },
                   ].map(s => (
                     <div key={s.label} className="bg-white rounded-2xl border border-slate-200 p-5 text-center">
                       <div className="text-xs text-slate-400 mb-1">{s.label}</div>
@@ -306,18 +347,13 @@ function ManagerView() {
                           <td className="px-4 py-3 cursor-pointer" onClick={() => setSelEmpId(e.id)}>
                             <span className="text-xs px-2 py-0.5 rounded" style={{ background: col+'15', color: col }}>{e.dept}</span>
                           </td>
-                          {/* 총 연차 인라인 편집 */}
                           <td className="px-4 py-3">
                             {isEditingThis ? (
                               <div className="flex items-center gap-1.5">
-                                <input
-                                  type="number" step="0.5" min="0"
-                                  value={editTotalVal}
+                                <input type="number" step="0.5" min="0" value={editTotalVal}
                                   onChange={ev => setEditTotalVal(ev.target.value)}
                                   onKeyDown={ev => { if (ev.key==='Enter') saveTotal(e.id); if (ev.key==='Escape') setEditingTotal(null) }}
-                                  autoFocus
-                                  className="w-16 border border-blue-400 rounded-lg px-2 py-1 text-sm font-bold outline-none"
-                                />
+                                  autoFocus className="w-16 border border-blue-400 rounded-lg px-2 py-1 text-sm font-bold outline-none" />
                                 <button onClick={() => saveTotal(e.id)} className="text-xs bg-blue-600 text-white px-2 py-1 rounded-lg font-semibold">저장</button>
                                 <button onClick={() => setEditingTotal(null)} className="text-xs text-slate-500 px-1 py-1">✕</button>
                               </div>
@@ -332,9 +368,7 @@ function ManagerView() {
                           <td className={`px-4 py-3 font-bold text-sm ${info.remain < 3 ? 'text-red-600':'text-green-600'}`}>{info.remain.toFixed(1)}일</td>
                           <td className="px-4 py-3">
                             <button onClick={() => setDetailEmpId(e.id)}
-                              className="text-xs text-blue-600 hover:text-blue-800 font-semibold px-2 py-1 rounded hover:bg-blue-50">
-                              상세보기
-                            </button>
+                              className="text-xs text-blue-600 hover:text-blue-800 font-semibold px-2 py-1 rounded hover:bg-blue-50">상세보기</button>
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
@@ -352,20 +386,25 @@ function ManagerView() {
               </div>
             )}
           </>
-        ) : (
-          /* 연차 내역 탭 (모든 직원의 leave_entries) */
+        )}
+
+        {tab === 'history' && (
           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-100 font-bold text-sm flex items-center gap-2">
               전체 연차 내역 ({year}년)
               <span className="text-xs text-slate-400 font-normal">{leaveEntries.length}건</span>
+              <select value={year} onChange={e => setYear(parseInt(e.target.value))}
+                className="ml-auto border border-slate-200 rounded-lg px-2 py-1 text-xs outline-none">
+                {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}년</option>)}
+              </select>
             </div>
             <table className="w-full border-collapse">
-              <thead><tr>{['등록일','직원','기간','일수','구분','관리'].map(h => (
+              <thead><tr>{['등록일','직원','기간','일수','구분','오전/오후','관리'].map(h => (
                 <th key={h} className="bg-slate-50 px-4 py-3 text-left text-xs font-bold text-slate-500 border-b border-slate-200">{h}</th>
               ))}</tr></thead>
               <tbody>
                 {leaveEntries.length === 0 ? (
-                  <tr><td colSpan={6} className="text-center text-slate-400 py-10 text-sm">내역 없음</td></tr>
+                  <tr><td colSpan={7} className="text-center text-slate-400 py-10 text-sm">내역 없음</td></tr>
                 ) : leaveEntries.map(en => {
                   const emp = employees.find(e => e.id === en.employee_id)
                   const col = DEPT_COLORS[emp?.dept || ''] || '#64748b'
@@ -390,6 +429,9 @@ function ManagerView() {
                           {en.type === 'Y' ? '연차':'반차'}
                         </span>
                       </td>
+                      <td className="px-4 py-3 text-xs text-slate-400">
+                        {en.type === 'H' ? (en.half_day === 'AM' ? '오전' : en.half_day === 'PM' ? '오후' : '—') : '—'}
+                      </td>
                       <td className="px-4 py-3">
                         <button onClick={() => handleDeleteEntry(en.id)}
                           className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-red-50">삭제</button>
@@ -401,16 +443,34 @@ function ManagerView() {
             </table>
           </div>
         )}
+
+        {tab === 'calendar' && (
+          <div className="space-y-3">
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center gap-3">
+              <select value={year} onChange={e => setYear(parseInt(e.target.value))}
+                className="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none">
+                {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}년</option>)}
+              </select>
+              <div className="flex gap-1">
+                {Array.from({length:12},(_,i)=>i+1).map(m => (
+                  <button key={m} onClick={() => setCalMonth(m)}
+                    className={`w-10 h-8 rounded-lg text-xs font-semibold transition-colors ${calMonth===m?'bg-blue-600 text-white':'hover:bg-blue-50 text-slate-600'}`}>
+                    {m}월
+                  </button>
+                ))}
+              </div>
+            </div>
+            <LeaveCalendar year={year} month={calMonth} employees={employees} scheduleY={scheduleY} />
+          </div>
+        )}
       </div>
 
-      {/* 연차 등록 모달 */}
       <LeaveRequestModal
         open={reqModal} onClose={() => setReqModal(false)}
         employees={employees} defaultEmpId={selEmpId}
         onSaved={() => { setReqModal(false); load() }}
       />
 
-      {/* 상세보기 모달 */}
       {detailEmpId && detailEmp && (
         <LeaveDetailModal
           emp={detailEmp}
@@ -420,6 +480,58 @@ function ManagerView() {
           onClose={() => setDetailEmpId(null)}
         />
       )}
+    </div>
+  )
+}
+
+// ─── 달력 컴포넌트 ─────────────────────────────────────────────────────────────
+function LeaveCalendar({ year, month, employees, scheduleY }: {
+  year: number; month: number
+  employees: Employee[]
+  scheduleY: Record<string, Array<{month:number; day:number; status:string}>>
+}) {
+  const dim = new Date(year, month, 0).getDate()
+  const firstDow = new Date(year, month - 1, 1).getDay()
+  const DAYS = ['일','월','화','수','목','금','토']
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 p-4">
+      <div className="text-sm font-bold text-slate-700 mb-3">{year}년 {month}월 연차 현황</div>
+      <div className="grid grid-cols-7 gap-0.5 mb-1">
+        {DAYS.map((d,i) => (
+          <div key={d} className={`text-center text-xs font-bold py-1 ${i===0?'text-red-400':i===6?'text-blue-400':'text-slate-400'}`}>{d}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-0.5">
+        {Array.from({length: firstDow}).map((_,i) => <div key={`e${i}`} />)}
+        {Array.from({length: dim}, (_, i) => i + 1).map(d => {
+          const dow = new Date(year, month - 1, d).getDay()
+          const dayEntries = employees.flatMap(e => {
+            const dates = scheduleY[e.id] || []
+            return dates.filter(sd => sd.month === month && sd.day === d).map(sd => ({ ...sd, emp: e }))
+          })
+          const yList = dayEntries.filter(e => e.status === 'Y')
+          const hList = dayEntries.filter(e => e.status === 'H')
+          const hasLeave = yList.length > 0 || hList.length > 0
+          return (
+            <div key={d} className="min-h-14 rounded-lg border p-1 text-left"
+              style={{
+                background: dow === 0 ? '#fff5f5' : dow === 6 ? '#eff6ff' : '#fff',
+                borderColor: hasLeave ? '#e2e8f0' : '#f1f5f9',
+              }}>
+              <div className={`text-xs font-bold mb-0.5 ${dow===0?'text-red-400':dow===6?'text-blue-400':'text-slate-500'}`}>{d}</div>
+              {yList.map((e, i) => (
+                <div key={i} className="text-xs truncate leading-4 rounded px-0.5 font-medium"
+                  style={{background:'#fed7aa',color:'#92400e'}}>{e.emp.name}</div>
+              ))}
+              {hList.map((e, i) => (
+                <div key={i} className="text-xs truncate leading-4 rounded px-0.5 font-medium"
+                  style={{background:'#bbf7d0',color:'#14532d'}}>{e.emp.name}(반)</div>
+              ))}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -436,11 +548,11 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
 
 // ─── 상세보기 모달 ─────────────────────────────────────────────────────────────
 function LeaveDetailModal({ emp, yDates, year, total, onClose }: {
-  emp: Employee;
-  yDates: Array<{month:number; day:number; status:string}>;
-  year: number;
-  total: number;
-  onClose: () => void;
+  emp: Employee
+  yDates: Array<{month:number; day:number; status:string}>
+  year: number
+  total: number
+  onClose: () => void
 }) {
   const byMonth: Record<number, Array<{day:number; status:string}>> = {}
   yDates.forEach(d => {
@@ -489,17 +601,15 @@ function LeaveDetailModal({ emp, yDates, year, total, onClose }: {
 function LeaveRequestModal({ open, onClose, employees, defaultEmpId, lockEmpId = false, onSaved }:
   { open: boolean; onClose: () => void; employees: Employee[]; defaultEmpId: string; lockEmpId?: boolean; onSaved: () => void }) {
   const td = new Date().toISOString().slice(0,10)
-  const [form, setForm] = useState({ empId: defaultEmpId, start: td, end: td, days: '1', type: 'Y' })
+  const [form, setForm] = useState({ empId: defaultEmpId, start: td, end: td, days: '1', type: 'Y', halfDay: 'AM' as 'AM' | 'PM' })
   const [saving, setSaving] = useState(false)
+  const [error, setError]   = useState('')
 
-  useEffect(() => { setForm(f => ({ ...f, empId: defaultEmpId })) }, [defaultEmpId, open])
+  useEffect(() => { setForm(f => ({ ...f, empId: defaultEmpId })); setError('') }, [defaultEmpId, open])
 
-  // 날짜 변경 시 일수 자동 계산 + 시작일이 종료일보다 뒤면 종료일도 이동
   const handleDateChange = (field: 'start' | 'end', value: string) => {
     const updated = { ...form, [field]: value }
-    if (field === 'start' && value > updated.end) {
-      updated.end = value
-    }
+    if (field === 'start' && value > updated.end) updated.end = value
     const s = new Date(updated.start), e = new Date(updated.end)
     const diff = Math.max(1, Math.round((e.getTime() - s.getTime()) / 86400000) + 1)
     setForm({ ...updated, days: updated.type === 'H' ? '0.5' : String(diff) })
@@ -507,24 +617,29 @@ function LeaveRequestModal({ open, onClose, employees, defaultEmpId, lockEmpId =
 
   const handleSubmit = async (ev: React.FormEvent) => {
     ev.preventDefault()
-    if (!form.empId) return alert('직원을 선택하세요')
-    setSaving(true)
+    if (!form.empId) return setError('직원을 선택하세요')
+    setSaving(true); setError('')
     const yr = new Date(form.start).getFullYear()
-    // 바로 leave_entries에 등록 (승인 불필요)
-    await supabase.from('leave_entries').insert([{
+
+    const { error: leaveErr } = await supabase.from('leave_entries').insert([{
       employee_id: form.empId,
       year: yr,
       start_date: form.start, end_date: form.end,
       days: parseFloat(form.days), type: form.type as 'Y' | 'H',
+      half_day: form.type === 'H' ? form.halfDay : null,
       note: null,
     }])
-    // 근무표에도 자동 반영
+    if (leaveErr) { setSaving(false); setError('등록 실패: ' + leaveErr.message); return }
+
     const start = new Date(form.start), end = new Date(form.end)
     const inserts: Array<{employee_id:string; year:number; month:number; day:number; status:string}> = []
     for (const dt = new Date(start); dt <= end; dt.setDate(dt.getDate() + 1)) {
       inserts.push({ employee_id: form.empId, year: dt.getFullYear(), month: dt.getMonth() + 1, day: dt.getDate(), status: form.type })
     }
-    if (inserts.length > 0) await supabase.from('schedules').upsert(inserts, { onConflict: 'employee_id,year,month,day' })
+    if (inserts.length > 0) {
+      const { error: schedErr } = await supabase.from('schedules').upsert(inserts, { onConflict: 'employee_id,year,month,day' })
+      if (schedErr) console.warn('근무표 반영 실패:', schedErr.message)
+    }
     setSaving(false)
     onSaved()
   }
@@ -534,6 +649,7 @@ function LeaveRequestModal({ open, onClose, employees, defaultEmpId, lockEmpId =
       <div className="bg-blue-50 rounded-xl p-3 mb-4 text-sm text-blue-700">
         신청 즉시 근무표에 자동 반영됩니다.
       </div>
+      {error && <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 text-sm text-red-700">{error}</div>}
       <form onSubmit={handleSubmit} className="space-y-4">
         {!lockEmpId && (
           <div>
@@ -557,6 +673,20 @@ function LeaveRequestModal({ open, onClose, employees, defaultEmpId, lockEmpId =
             ))}
           </div>
         </div>
+        {form.type === 'H' && (
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 mb-1.5">오전/오후</label>
+            <div className="flex gap-2">
+              {[{v:'AM',l:'오전 반차'},{v:'PM',l:'오후 반차'}].map(({v,l}) => (
+                <button key={v} type="button"
+                  onClick={() => setForm(f => ({ ...f, halfDay: v as 'AM' | 'PM' }))}
+                  className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-colors ${form.halfDay === v ? 'bg-green-600 text-white border-green-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold text-slate-500 mb-1.5">시작일 *</label>
