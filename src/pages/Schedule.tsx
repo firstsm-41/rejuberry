@@ -385,23 +385,78 @@ export default function Schedule() {
   }
 
   const exportImage = async () => {
-    const container = tableContainerRef.current
-    if (!container) return
-    const table = container.querySelector('table')
-    if (!table) return
+    const BA = '1px solid #e2e8f0'
+    const cellStyle = (bg: string, color: string, bold: boolean, align: string) =>
+      `border:${BA};padding:3px 4px;text-align:${align};background:${bg};color:${color};font-weight:${bold?'bold':'normal'};font-size:10px;white-space:nowrap`
+
+    const thDate = Array.from({length:dim},(_,i) => {
+      const d=i+1, w=dow(d)
+      const bg=w===6?'#dbeafe':w===0?'#fee2e2':'#f1f5f9'
+      const tc=w===6?'#1d4ed8':w===0?'#b91c1c':'#334155'
+      return `<th style="${cellStyle(bg,tc,true,'center')}">${d}<br><span style="font-size:8px">${DAYS_KR[w]}</span></th>`
+    }).join('')
+
+    const rows = employees.map(e => {
+      const sch=schMap[e.id]||{}
+      const cells = Array.from({length:dim},(_,i) => {
+        const d=i+1, st=sch[d]||''
+        const cfg=STATUS_CFG[st]||STATUS_CFG['']
+        const bg=st&&cfg.bg!=='transparent'?cfg.bg:'#ffffff'
+        const tc=st&&cfg.color!=='transparent'?cfg.color:'#94a3b8'
+        return `<td style="${cellStyle(bg,tc,!!st,'center')}">${st||''}</td>`
+      }).join('')
+      const col=DEPT_COLORS[e.dept]||'#64748b'
+      return `<tr>
+        <td style="${cellStyle(col+'18','#334155',true,'left')}">${e.name}</td>
+        <td style="${cellStyle('#f8fafc','#64748b',false,'left')}">${e.position}</td>
+        ${cells}
+      </tr>`
+    }).join('')
+
+    const deptRows = DEPTS.filter(d => grouped[d].length > 0).map(dept => {
+      const col=DEPT_COLORS[dept]||'#64748b'
+      const emps=grouped[dept]
+      return `
+        <tr><td colspan="${2+dim}" style="background:${col}18;color:${col};font-weight:700;font-size:10px;padding:3px 8px;border:${BA}">▸ ${dept}</td></tr>
+        ${emps.map(e => {
+          const sch=schMap[e.id]||{}
+          const cells=Array.from({length:dim},(_,i) => {
+            const d=i+1, st=sch[d]||''
+            const cfg=STATUS_CFG[st]||STATUS_CFG['']
+            const bg=st&&cfg.bg!=='transparent'?cfg.bg:'#ffffff'
+            const tc=st&&cfg.color!=='transparent'?cfg.color:'#94a3b8'
+            return `<td style="${cellStyle(bg,tc,!!st,'center')}">${st||''}</td>`
+          }).join('')
+          return `<tr>
+            <td style="${cellStyle(col+'10','#334155',true,'left')}">${e.name}</td>
+            <td style="${cellStyle('#f8fafc','#64748b',false,'left')}">${e.position}</td>
+            ${cells}
+          </tr>`
+        }).join('')}
+      `
+    }).join('')
+
+    void rows
+
+    const html = `<div style="font-family:'Malgun Gothic',sans-serif;padding:16px;background:#fff;display:inline-block">
+      <div style="font-size:14px;font-weight:900;color:#1e293b;margin-bottom:10px">${year}년 ${month}월 근무표</div>
+      <table style="border-collapse:collapse">
+        <thead><tr>
+          <th style="${cellStyle('#334155','#f8fafc',true,'left')}">이름</th>
+          <th style="${cellStyle('#334155','#f8fafc',true,'left')}">직급</th>
+          ${thDate}
+        </tr></thead>
+        <tbody>${deptRows}</tbody>
+      </table>
+    </div>`
 
     const wrapper = document.createElement('div')
-    wrapper.style.cssText = 'position:fixed;left:-99999px;top:0;background:#ffffff;padding:16px;width:max-content;z-index:-1'
-    const clone = table.cloneNode(true) as HTMLElement
-    // sticky 포지션 제거 (html2canvas 호환)
-    clone.querySelectorAll('th,td').forEach(el => {
-      (el as HTMLElement).style.position = 'static'
-    })
-    wrapper.appendChild(clone)
+    wrapper.style.cssText = 'position:fixed;left:-99999px;top:0;z-index:-1'
+    wrapper.innerHTML = html
     document.body.appendChild(wrapper)
     try {
-      await new Promise(r => setTimeout(r, 150))
-      const canvas = await html2canvas(wrapper, {
+      await new Promise(r => setTimeout(r, 100))
+      const canvas = await html2canvas(wrapper.firstElementChild as HTMLElement, {
         scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff',
       })
       const link = document.createElement('a')
@@ -797,7 +852,7 @@ export default function Schedule() {
       {picker && canEdit && (
         <div ref={pickerRef} style={{position:'fixed',left:picker.x,top:picker.y,zIndex:300}}
           className="bg-white rounded-xl shadow-2xl p-2 flex items-center gap-1 border border-slate-200">
-          <span className="text-xs text-slate-400 px-1 mr-1 font-mono">D·S·H·Y·O·방향키·Esc</span>
+          <span className="text-xs text-slate-400 px-1 mr-1 font-mono">D·S·H·Y·O·방향키</span>
           {STATUS_ORDER.map(s => {
             const cfg=STATUS_CFG[s], cur=(schMap[picker.empId]||{})[picker.day]||''
             return (
@@ -808,6 +863,14 @@ export default function Schedule() {
               </button>
             )
           })}
+          <button onClick={() => {
+            const st = ((schMap[picker.empId]||{})[picker.day] ?? '') as WorkStatus
+            setClipStatus(st)
+            setClipSrc({ empId: picker.empId, day: picker.day })
+            setPicker(null)
+          }} className="ml-1 px-3 h-10 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200">
+            복사
+          </button>
         </div>
       )}
 

@@ -51,6 +51,10 @@ function ManagerView({ selEmpDefault }: { selEmpDefault: string }) {
   const [detailModal, setDetailModal] = useState(false)
   const [loading, setLoading] = useState(true)
 
+  const _now = new Date()
+  const [viewYear, setViewYear]   = useState(_now.getFullYear())
+  const [viewMonth, setViewMonth] = useState(_now.getMonth() + 1)
+
   const load = useCallback(async () => {
     const [empsRes, entriesRes] = await Promise.all([
       supabase.from('employees').select('*').eq('status', 'active').order('id'),
@@ -64,15 +68,20 @@ function ManagerView({ selEmpDefault }: { selEmpDefault: string }) {
   useEffect(() => { load() }, [load])
   useEffect(() => { setSelEmpId(selEmpDefault) }, [selEmpDefault])
 
-  const now0 = new Date()
-  const curYear = now0.getFullYear()
-  const curMonth = now0.getMonth() + 1
+  const prevMonth = () => {
+    if (viewMonth === 1) { setViewMonth(12); setViewYear(y => y - 1) }
+    else setViewMonth(m => m - 1)
+  }
+  const nextMonth = () => {
+    if (viewMonth === 12) { setViewMonth(1); setViewYear(y => y + 1) }
+    else setViewMonth(m => m + 1)
+  }
 
   const getBalance = (empId: string) => {
     const es = entries.filter(e => {
       if (e.employee_id !== empId) return false
       const d = new Date(e.date)
-      return d.getFullYear() === curYear && d.getMonth() + 1 === curMonth
+      return d.getFullYear() === viewYear && d.getMonth() + 1 === viewMonth
     })
     const earned = es.filter(e => e.type === 'earn').reduce((s, e) => s + Number(e.hours), 0)
     const used   = es.filter(e => e.type === 'use').reduce((s, e) => s + Number(e.hours), 0)
@@ -90,14 +99,17 @@ function ManagerView({ selEmpDefault }: { selEmpDefault: string }) {
     <div className="flex flex-col h-full overflow-auto">
       <div className="p-6 space-y-5">
         {/* 헤더 */}
-        <div className="flex justify-end">
+        <div className="flex items-center gap-3">
+          <button onClick={prevMonth} className="bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-sm font-semibold">◀</button>
+          <span className="font-bold text-slate-700 min-w-[100px] text-center">{viewYear}년 {viewMonth}월</span>
+          <button onClick={nextMonth} className="bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-sm font-semibold">▶</button>
+          <span className="text-xs text-slate-400">기준 · 매월 1일 리셋</span>
           <button onClick={() => setAddModal(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+            className="ml-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
             + 오버타임 추가
           </button>
         </div>
         {/* 팀별 카드 */}
-        <div className="text-xs text-slate-400 -mt-2">{curYear}년 {curMonth}월 기준 · 매월 1일 리셋</div>
         {MANAGER_OT_GROUPS.map(group => {
           const groupEmps = employees.filter(e => group.depts.includes(e.dept))
           if (groupEmps.length === 0) return null
@@ -153,7 +165,7 @@ function ManagerView({ selEmpDefault }: { selEmpDefault: string }) {
           return (
             <div className="space-y-4">
               <div className="flex items-center gap-4 text-sm bg-blue-50 rounded-xl p-3">
-                <span className="text-xs text-blue-400 font-semibold flex-shrink-0">{curMonth}월</span>
+                <span className="text-xs text-blue-400 font-semibold flex-shrink-0">{viewMonth}월</span>
                 <span className="text-blue-600 font-semibold">적립 {fmtMin(b.earned)}</span>
                 <span className="text-amber-600 font-semibold">사용 {fmtMin(b.used)}</span>
                 <span className={`font-bold ${b.remain < 0 ? 'text-red-600' : 'text-green-600'}`}>잔여 {fmtMin(b.remain)}</span>
