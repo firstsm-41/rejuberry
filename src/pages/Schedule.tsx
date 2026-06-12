@@ -225,18 +225,26 @@ export default function Schedule() {
   const DAYS_EN = ['일','월','화','수','목','금','토']
 
   const exportExcel = () => {
-    const headerRow1 = ['사번','소속','이름','직급',
+    const totalCols = 4 + dim + 5
+    const FONT = 'Malgun Gothic'
+    const BORDER = { style: 'thin' as const, color: { rgb: 'cbd5e1' } }
+    const BORDER_ALL = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER }
+
+    // 타이틀 + 2 헤더 행
+    const titleRow: (string|number)[] = [`${year}년 ${month}월 근무표`, ...Array(totalCols - 1).fill('')]
+    const headerRow1: (string|number)[] = ['사번','소속','이름','직급',
       ...Array.from({ length: dim }, (_, i) => i + 1),
       '근무(D)','추가(S)','반차(H)','OFF','연차(Y)']
-    const headerRow2 = ['','','','',
+    const headerRow2: (string|number)[] = ['','','','',
       ...Array.from({ length: dim }, (_, i) => DAYS_EN[new Date(year, month - 1, i + 1).getDay()]),
       '','','','','']
-    const rows: (string | number)[][] = [headerRow1, headerRow2]
+
+    const rows: (string | number)[][] = [titleRow, headerRow1, headerRow2]
 
     for (const dept of DEPTS) {
       const emps = grouped[dept]
       if (!emps.length) continue
-      rows.push([dept])
+      rows.push([dept, ...Array(totalCols - 1).fill('')])
       for (const e of emps) {
         const sch = schMap[e.id] || {}
         const sum = calcSummary(e.id)
@@ -249,60 +257,98 @@ export default function Schedule() {
     }
 
     const ws = XLSX.utils.aoa_to_sheet(rows)
+    ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: totalCols - 1 } }]
     ws['!cols'] = [
       { wch: 6 }, { wch: 10 }, { wch: 8 }, { wch: 12 },
       ...Array.from({ length: dim }, () => ({ wch: 4 })),
       { wch: 6 }, { wch: 6 }, { wch: 6 }, { wch: 6 }, { wch: 6 },
     ]
+    ws['!rows'] = [{ hpt: 26 }, { hpt: 20 }, { hpt: 16 }]
 
-    // 셀 색상 적용
-    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1')
-    let dataRow = 2  // 헤더 2줄 skip
+    // 타이틀 스타일
+    const titleAddr = XLSX.utils.encode_cell({ r: 0, c: 0 })
+    if (!ws[titleAddr]) ws[titleAddr] = { v: titleRow[0], t: 's' }
+    ws[titleAddr].s = {
+      fill: { patternType: 'solid', fgColor: { rgb: '1e293b' } },
+      font: { name: FONT, bold: true, sz: 14, color: { rgb: 'f8fafc' } },
+      alignment: { horizontal: 'center', vertical: 'center' },
+    }
+
+    // 헤더 행 스타일 (rows 1 & 2)
+    for (let c = 0; c < totalCols; c++) {
+      ;[1, 2].forEach(r => {
+        const addr = XLSX.utils.encode_cell({ r, c })
+        if (!ws[addr]) ws[addr] = { v: '', t: 's' }
+        const isSat = r === 2 && c >= 4 && c < 4 + dim && new Date(year, month - 1, c - 3).getDay() === 6
+        const isSun = r === 2 && c >= 4 && c < 4 + dim && new Date(year, month - 1, c - 3).getDay() === 0
+        ws[addr].s = {
+          fill: { patternType: 'solid', fgColor: { rgb: '334155' } },
+          font: { name: FONT, bold: true, sz: 9, color: { rgb: isSat ? '93c5fd' : isSun ? 'fca5a5' : 'f8fafc' } },
+          alignment: { horizontal: 'center', vertical: 'center' },
+          border: BORDER_ALL,
+        }
+      })
+    }
+
+    // 데이터 행 스타일
+    let dataRow = 3
     for (const dept of DEPTS) {
       const emps = grouped[dept]
       if (!emps.length) continue
-      dataRow++  // dept 행
+      // 부서 헤더 행
+      const deptCol = DEPT_COLORS[dept] || '#64748b'
+      for (let c = 0; c < totalCols; c++) {
+        const addr = XLSX.utils.encode_cell({ r: dataRow, c })
+        if (!ws[addr]) ws[addr] = { v: c === 0 ? dept : '', t: 's' }
+        ws[addr].s = {
+          fill: { patternType: 'solid', fgColor: { rgb: deptCol.replace('#','') + '22' } },
+          font: { name: FONT, bold: true, sz: 9, color: { rgb: deptCol.replace('#','') } },
+          border: BORDER_ALL,
+          alignment: { horizontal: c === 0 ? 'left' : 'center', vertical: 'center' },
+        }
+      }
+      dataRow++
+
       for (const e of emps) {
         const sch = schMap[e.id] || {}
+        // 기본 셀 스타일 (이름 등 고정 컬럼)
+        for (let c = 0; c < 4; c++) {
+          const addr = XLSX.utils.encode_cell({ r: dataRow, c })
+          if (!ws[addr]) ws[addr] = { v: '', t: 's' }
+          ws[addr].s = {
+            font: { name: FONT, sz: 9, bold: c === 2 },
+            border: BORDER_ALL,
+            alignment: { horizontal: 'left', vertical: 'center' },
+          }
+        }
+        // 날짜 셀 색상
         for (let col = 4; col < 4 + dim; col++) {
           const d = col - 3
           const st = sch[d] || ''
-          if (!st) continue
           const cfg = STATUS_CFG[st]
-          if (!cfg || cfg.bg === 'transparent') continue
           const addr = XLSX.utils.encode_cell({ r: dataRow, c: col })
           if (!ws[addr]) ws[addr] = { v: st, t: 's' }
           ws[addr].s = {
-            fill: { patternType: 'solid', fgColor: { rgb: cfg.bg.replace('#','') } },
-            font: { bold: true, color: { rgb: cfg.color.replace('#','') } },
+            fill: st && cfg.bg !== 'transparent' ? { patternType: 'solid', fgColor: { rgb: cfg.bg.replace('#','') } } : undefined,
+            font: { name: FONT, bold: !!st, sz: 9, color: { rgb: st ? cfg.color.replace('#','') : '64748b' } },
             alignment: { horizontal: 'center', vertical: 'center' },
+            border: BORDER_ALL,
           }
         }
-        // 집계 컬럼 색상
+        // 집계 컬럼
         ;(['D','S','H','OFF','Y'] as WorkStatus[]).forEach((s, si) => {
           const addr = XLSX.utils.encode_cell({ r: dataRow, c: 4 + dim + si })
-          if (ws[addr]) {
-            ws[addr].s = {
-              fill: { patternType: 'solid', fgColor: { rgb: STATUS_CFG[s].bg.replace('#','') } },
-              font: { bold: true, color: { rgb: STATUS_CFG[s].color.replace('#','') } },
-              alignment: { horizontal: 'center' },
-            }
+          if (!ws[addr]) ws[addr] = { v: '', t: 's' }
+          const cfg = STATUS_CFG[s]
+          ws[addr].s = {
+            fill: { patternType: 'solid', fgColor: { rgb: cfg.bg.replace('#','') } },
+            font: { name: FONT, bold: true, sz: 9, color: { rgb: cfg.color.replace('#','') } },
+            alignment: { horizontal: 'center' },
+            border: BORDER_ALL,
           }
         })
         dataRow++
       }
-    }
-    // 헤더 행 스타일
-    for (let c = range.s.c; c <= range.e.c; c++) {
-      ;[0,1].forEach(r => {
-        const addr = XLSX.utils.encode_cell({ r, c })
-        if (!ws[addr]) return
-        ws[addr].s = {
-          fill: { patternType: 'solid', fgColor: { rgb: 'f8fafc'.replace('#','') } },
-          font: { bold: true },
-          alignment: { horizontal: 'center' },
-        }
-      })
     }
 
     const wb = XLSX.utils.book_new()
@@ -313,19 +359,32 @@ export default function Schedule() {
   const exportImage = async () => {
     const el = tableContainerRef.current
     if (!el) return
-    const prev = { maxHeight: el.style.maxHeight, overflow: el.style.overflow }
+    const prevStyle = {
+      maxHeight: el.style.maxHeight, overflow: el.style.overflow,
+      height: el.style.height, width: el.style.width,
+    }
     el.style.maxHeight = 'none'
     el.style.overflow = 'visible'
-    await new Promise(r => requestAnimationFrame(r))
+    el.style.height = el.scrollHeight + 'px'
+    el.style.width = el.scrollWidth + 'px'
+    el.scrollTop = 0; el.scrollLeft = 0
+    await new Promise(r => setTimeout(r, 150))
     try {
-      const canvas = await html2canvas(el, { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' })
+      const canvas = await html2canvas(el, {
+        scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff',
+        scrollX: 0, scrollY: 0,
+        width: el.scrollWidth, height: el.scrollHeight,
+        windowWidth: el.scrollWidth, windowHeight: el.scrollHeight,
+      })
       const link = document.createElement('a')
       link.download = `근무표_${year}년${month}월.png`
       link.href = canvas.toDataURL('image/png')
       link.click()
     } finally {
-      el.style.maxHeight = prev.maxHeight
-      el.style.overflow = prev.overflow
+      el.style.maxHeight = prevStyle.maxHeight
+      el.style.overflow = prevStyle.overflow
+      el.style.height = prevStyle.height
+      el.style.width = prevStyle.width
     }
   }
 

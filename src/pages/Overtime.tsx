@@ -5,7 +5,16 @@ import type { Employee, OvertimeEntry } from '../types/database'
 
 import Modal from '../components/Modal'
 
-const DEPT_ORDER = ['대표원장','부원장','총괄실장','실장','코디','간호','피부1(시술)','피부2(관리)','마케팅','미분류']
+// 오버타임 확인 표시 그룹 (대표원장/부원장 제외, 총괄실장/실장 묶음)
+const MANAGER_OT_GROUPS = [
+  { label: '실장팀', depts: ['총괄실장','실장'], color: '#7c3aed' },
+  { label: '코디',   depts: ['코디'],             color: '#0369a1' },
+  { label: '간호',   depts: ['간호'],              color: '#047857' },
+  { label: '피부1(시술)', depts: ['피부1(시술)'],  color: '#9d174d' },
+  { label: '피부2(관리)', depts: ['피부2(관리)'],  color: '#92400e' },
+  { label: '마케팅', depts: ['마케팅'],            color: '#0f766e' },
+  { label: '미분류', depts: ['미분류'],            color: '#6b7280' },
+]
 
 const fmtMin = (min: number) => {
   if (min <= 0) return '0분'
@@ -60,8 +69,6 @@ function ManagerView({ selEmpDefault }: { selEmpDefault: string }) {
     return { earned, used, remain: earned - used }
   }
 
-  const totalEarned = entries.filter(e => e.type === 'earn').reduce((s, e) => s + e.hours, 0)
-  const totalUsed   = entries.filter(e => e.type === 'use').reduce((s, e) => s + e.hours, 0)
 
   const openDetail = (empId: string) => { setSelEmpId(empId); setDetailModal(true) }
 
@@ -80,39 +87,20 @@ function ManagerView({ selEmpDefault }: { selEmpDefault: string }) {
             + 오버타임 추가
           </button>
         </div>
-        {/* Stats */}
-        <div className="grid grid-cols-4 gap-4">
-          {[
-            { label: '전체 직원',        value: employees.length,       unit:'명', color:'text-slate-800' },
-            { label: '총 적립',          value: fmtMin(totalEarned), unit:'',  color:'text-blue-600' },
-            { label: '총 사용',          value: fmtMin(totalUsed),   unit:'',  color:'text-amber-600' },
-            { label: '잔여 (전체)',      value: fmtMin(totalEarned - totalUsed), unit:'', color: totalEarned - totalUsed >= 0 ? 'text-green-600' : 'text-red-600' },
-          ].map(s => (
-            <div key={s.label} className="bg-white rounded-2xl border border-slate-200 p-5">
-              <div className="text-xs font-semibold text-slate-400 mb-2">{s.label}</div>
-              <div className={`text-3xl font-bold ${s.color}`}>
-                {s.value}<span className="text-base font-normal text-slate-400 ml-1">{s.unit}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-
         {/* 팀별 카드 */}
-        {DEPT_ORDER.filter(dept => {
-          const deptEmps = employees.filter(e => e.dept === dept)
-          return deptEmps.length > 0
-        }).map(dept => {
-          const col = DEPT_COLORS[dept] || '#64748b'
-          const deptEmps = employees.filter(e => e.dept === dept)
+        {MANAGER_OT_GROUPS.map(group => {
+          const groupEmps = employees.filter(e => group.depts.includes(e.dept))
+          if (groupEmps.length === 0) return null
           return (
-            <div key={dept}>
+            <div key={group.label}>
               <div className="flex items-center gap-2 mb-2">
-                <div className="w-2.5 h-2.5 rounded-full" style={{ background: col }} />
-                <span className="text-xs font-bold" style={{ color: col }}>{dept}</span>
-                <span className="text-xs text-slate-400">{deptEmps.length}명</span>
+                <div className="w-2.5 h-2.5 rounded-full" style={{ background: group.color }} />
+                <span className="text-xs font-bold" style={{ color: group.color }}>{group.label}</span>
+                <span className="text-xs text-slate-400">{groupEmps.length}명</span>
               </div>
               <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))' }}>
-                {deptEmps.map(e => {
+                {groupEmps.map(e => {
+                  const col = DEPT_COLORS[e.dept] || '#64748b'
                   const bal = getBalance(e.id)
                   const usedPct = bal.earned > 0 ? Math.min(100, Math.round(bal.used / bal.earned * 100)) : 0
                   return (
@@ -221,10 +209,6 @@ function StaffView({ empId }: { empId: string }) {
     e.preventDefault()
     if (!empId) return
     const hrs = parseFloat(form.hours)
-    if (tab === 'use' && hrs > remain) {
-      alert(`잔여 오버타임(${fmtMin(remain)})을 초과할 수 없습니다`)
-      return
-    }
     setSaving(true)
     await supabase.from('overtime').insert([{
       employee_id: empId, date: form.date,

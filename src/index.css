@@ -26,8 +26,16 @@ body {
 .sch-cell:hover { filter: brightness(0.88); border-color: #94a3b8 !important; }
 
 @media print {
+  @page { size: A4 landscape; margin: 5mm; }
   aside, .no-print { display: none !important; }
-  main { overflow: visible !important; }
-  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  main { overflow: visible !important; height: auto !important; }
+  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; overflow: visible !important; }
+  html, body { height: auto !important; }
+  #root { height: auto !important; overflow: visible !important; }
   div[style*="max-height"] { max-height: none !important; overflow: visible !important; }
+  .overflow-hidden { overflow: visible !important; }
+  .overflow-auto { overflow: visible !important; max-height: none !important; height: auto !important; }
+  table { font-size: 7.5pt !important; border-collapse: collapse !important; }
+  th, td { padding: 2px 3px !important; }
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 }
