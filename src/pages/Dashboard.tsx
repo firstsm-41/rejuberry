@@ -179,23 +179,21 @@ export default function Dashboard() {
 
           <div className="divide-y divide-slate-50">
             {TEAM_GROUPS.map(group => {
-              const emps = employees.filter(e => group.depts.includes(e.dept))
-              if (emps.length === 0) return null
+              const allEmps = employees.filter(e => group.depts.includes(e.dept))
+              const workingEmps = allEmps.filter(e => ['D','S','H'].includes(todaySchedule[e.id] || ''))
+              if (workingEmps.length === 0) return null
               const col = group.color
-              const workCnt = emps.filter(e => ['D','S'].includes(todaySchedule[e.id] || '')).length
               return (
                 <div key={group.label}>
-                  {/* 팀 헤더 */}
                   <div className="px-5 py-2 flex items-center gap-2" style={{ background: col + '0d' }}>
                     <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: col }} />
                     <span className="text-xs font-bold" style={{ color: col }}>{group.label}</span>
                     <span className="text-xs text-slate-400 ml-auto">
-                      근무 <span style={{ color: col }} className="font-bold">{workCnt}</span>/{emps.length}명
+                      <span style={{ color: col }} className="font-bold">{workingEmps.length}</span>/{allEmps.length}명 근무 중
                     </span>
                   </div>
-                  {/* 직원 행 */}
-                  {emps.map(e => {
-                    const st = todaySchedule[e.id] || ''
+                  {workingEmps.map(e => {
+                    const st = todaySchedule[e.id]
                     const cfg = STATUS_CFG[st]
                     return (
                       <div key={e.id} className="px-5 py-2.5 flex items-center gap-3 hover:bg-slate-50/70 transition-colors">
@@ -203,19 +201,18 @@ export default function Dashboard() {
                           style={{ background: col + 'bb' }}>{e.name[0]}</div>
                         <span className="text-sm font-medium text-slate-700 w-16 flex-shrink-0">{e.name}</span>
                         <span className="text-xs text-slate-400 flex-1">{e.position}</span>
-                        {st && cfg ? (
-                          <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ background: cfg.bg, color: cfg.color }}>
-                            {cfg.label}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-slate-300">—</span>
-                        )}
+                        <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ background: cfg.bg, color: cfg.color }}>
+                          {cfg.label}
+                        </span>
                       </div>
                     )
                   })}
                 </div>
               )
             })}
+            {hasSchedule && employees.filter(e => ['D','S','H'].includes(todaySchedule[e.id] || '')).length === 0 && (
+              <div className="text-center text-slate-400 py-10 text-sm">오늘 근무 중인 인원이 없습니다</div>
+            )}
           </div>
         </div>
 
