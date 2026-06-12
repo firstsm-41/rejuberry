@@ -24,8 +24,6 @@ export default function Personnel() {
   const { profile } = useAuth()
   if ((profile?.level ?? 2) > 1) return <Navigate to="/" replace />
 
-  const canViewSensitive = (profile?.level ?? 2) <= 1
-
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
 

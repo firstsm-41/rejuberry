@@ -17,7 +17,7 @@ export default function Employees() {
 
   useEffect(() => {
     supabase.from('employees').select('id,name,dept,position,status').eq('status','active').order('id')
-      .then(({ data }) => { setEmployees(data || []); setLoading(false) })
+      .then(({ data }: { data: Employee[] | null }) => { setEmployees(data || []); setLoading(false) })
   }, [])
 
   const filtered = search
