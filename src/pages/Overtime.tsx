@@ -64,13 +64,20 @@ function ManagerView({ selEmpDefault }: { selEmpDefault: string }) {
   useEffect(() => { load() }, [load])
   useEffect(() => { setSelEmpId(selEmpDefault) }, [selEmpDefault])
 
+  const now0 = new Date()
+  const curYear = now0.getFullYear()
+  const curMonth = now0.getMonth() + 1
+
   const getBalance = (empId: string) => {
-    const es = entries.filter(e => e.employee_id === empId)
+    const es = entries.filter(e => {
+      if (e.employee_id !== empId) return false
+      const d = new Date(e.date)
+      return d.getFullYear() === curYear && d.getMonth() + 1 === curMonth
+    })
     const earned = es.filter(e => e.type === 'earn').reduce((s, e) => s + Number(e.hours), 0)
     const used   = es.filter(e => e.type === 'use').reduce((s, e) => s + Number(e.hours), 0)
     return { earned, used, remain: earned - used }
   }
-
 
   const openDetail = (empId: string) => { setSelEmpId(empId); setDetailModal(true) }
 
@@ -90,6 +97,7 @@ function ManagerView({ selEmpDefault }: { selEmpDefault: string }) {
           </button>
         </div>
         {/* 팀별 카드 */}
+        <div className="text-xs text-slate-400 -mt-2">{curYear}년 {curMonth}월 기준 · 매월 1일 리셋</div>
         {MANAGER_OT_GROUPS.map(group => {
           const groupEmps = employees.filter(e => group.depts.includes(e.dept))
           if (groupEmps.length === 0) return null
@@ -144,12 +152,14 @@ function ManagerView({ selEmpDefault }: { selEmpDefault: string }) {
           const b = getBalance(selEmp.id)
           return (
             <div className="space-y-4">
-              <div className="flex gap-4 text-sm">
+              <div className="flex items-center gap-4 text-sm bg-blue-50 rounded-xl p-3">
+                <span className="text-xs text-blue-400 font-semibold flex-shrink-0">{curMonth}월</span>
                 <span className="text-blue-600 font-semibold">적립 {fmtMin(b.earned)}</span>
                 <span className="text-amber-600 font-semibold">사용 {fmtMin(b.used)}</span>
                 <span className={`font-bold ${b.remain < 0 ? 'text-red-600' : 'text-green-600'}`}>잔여 {fmtMin(b.remain)}</span>
               </div>
-              <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto rounded-xl border border-slate-100">
+              <div className="text-xs font-semibold text-slate-400 px-1">전체 내역</div>
+              <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto rounded-xl border border-slate-100">
                 {selEntries.length === 0 ? (
                   <p className="text-sm text-slate-400 text-center py-8">내역 없음</p>
                 ) : selEntries.map(en => (
@@ -203,8 +213,15 @@ function StaffView({ empId }: { empId: string }) {
 
   useEffect(() => { load() }, [load])
 
-  const earned = entries.filter(e => e.type === 'earn').reduce((s, e) => s + Number(e.hours), 0)
-  const used   = entries.filter(e => e.type === 'use').reduce((s, e) => s + Number(e.hours), 0)
+  const now = new Date()
+  const curYear = now.getFullYear()
+  const curMonth = now.getMonth() + 1
+  const thisMonthEntries = entries.filter(e => {
+    const d = new Date(e.date)
+    return d.getFullYear() === curYear && d.getMonth() + 1 === curMonth
+  })
+  const earned = thisMonthEntries.filter(e => e.type === 'earn').reduce((s, e) => s + Number(e.hours), 0)
+  const used   = thisMonthEntries.filter(e => e.type === 'use').reduce((s, e) => s + Number(e.hours), 0)
   const remain = earned - used
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -229,8 +246,8 @@ function StaffView({ empId }: { empId: string }) {
         {/* Balance */}
         <div className="grid grid-cols-3 gap-4">
           {[
-            { label: '총 적립', value: fmtMin(earned), unit:'', color:'text-blue-600' },
-            { label: '총 사용', value: fmtMin(used),   unit:'', color:'text-amber-600' },
+            { label: `${curMonth}월 적립`, value: fmtMin(earned), unit:'', color:'text-blue-600' },
+            { label: `${curMonth}월 사용`, value: fmtMin(used),   unit:'', color:'text-amber-600' },
             { label: '잔여',    value: fmtMin(remain), unit:'', color: remain < 0 ? 'text-red-600' : remain === 0 ? 'text-slate-400' : 'text-green-600' },
           ].map(s => (
             <div key={s.label} className="bg-white rounded-2xl border border-slate-200 p-5 text-center">

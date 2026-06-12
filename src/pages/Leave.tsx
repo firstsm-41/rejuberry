@@ -72,21 +72,7 @@ function StaffView() {
 
   const handleDeleteEntry = async (id: number) => {
     if (!confirm('삭제할까요?')) return
-    const entry = entries.find(e => e.id === id)
     await supabase.from('leave_entries').delete().eq('id', id)
-    if (entry) {
-      const dates: Array<{y:number; m:number; d:number}> = []
-      const s = new Date(entry.start_date), en = new Date(entry.end_date)
-      for (const dt = new Date(s); dt <= en; dt.setDate(dt.getDate() + 1)) {
-        dates.push({ y: dt.getFullYear(), m: dt.getMonth() + 1, d: dt.getDate() })
-      }
-      await Promise.all(dates.map(({ y, m, d }) =>
-        supabase.from('schedules').delete()
-          .eq('employee_id', myEmpId)
-          .eq('year', y).eq('month', m).eq('day', d)
-          .eq('status', entry.type)
-      ))
-    }
     await load()
   }
 
@@ -118,14 +104,17 @@ function StaffView() {
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100 font-bold text-sm">{year}년 연차 내역</div>
           <table className="w-full border-collapse">
-            <thead><tr>{['시작일','종료일','일수','구분','오전/오후','관리'].map(h => (
+            <thead><tr>{['신청일','시작일','종료일','일수','구분','오전/오후','관리'].map(h => (
               <th key={h} className="bg-slate-50 px-4 py-3 text-left text-xs font-bold text-slate-500 border-b border-slate-200">{h}</th>
             ))}</tr></thead>
             <tbody>
               {entries.length === 0 ? (
-                <tr><td colSpan={6} className="text-center text-slate-400 py-10 text-sm">연차 사용 내역 없음</td></tr>
+                <tr><td colSpan={7} className="text-center text-slate-400 py-10 text-sm">연차 사용 내역 없음</td></tr>
               ) : entries.map(en => (
                 <tr key={en.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                  <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">
+                    {en.created_at ? new Date(en.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}) : '—'}
+                  </td>
                   <td className="px-4 py-3 text-sm">{en.start_date}</td>
                   <td className="px-4 py-3 text-sm">{en.end_date}</td>
                   <td className="px-4 py-3 font-bold text-amber-600 text-sm">{en.days}일</td>
@@ -235,21 +224,7 @@ function ManagerView() {
 
   const handleDeleteEntry = async (id: number) => {
     if (!confirm('삭제할까요?')) return
-    const entry = leaveEntries.find(e => e.id === id)
     await supabase.from('leave_entries').delete().eq('id', id)
-    if (entry) {
-      const dates: Array<{y:number; m:number; d:number}> = []
-      const s = new Date(entry.start_date), en = new Date(entry.end_date)
-      for (const dt = new Date(s); dt <= en; dt.setDate(dt.getDate() + 1)) {
-        dates.push({ y: dt.getFullYear(), m: dt.getMonth() + 1, d: dt.getDate() })
-      }
-      await Promise.all(dates.map(({ y, m, d }) =>
-        supabase.from('schedules').delete()
-          .eq('employee_id', entry.employee_id)
-          .eq('year', y).eq('month', m).eq('day', d)
-          .eq('status', entry.type)
-      ))
-    }
     await load()
   }
 
@@ -609,7 +584,13 @@ function LeaveRequestModal({ open, onClose, employees, defaultEmpId, lockEmpId =
 
   const handleDateChange = (field: 'start' | 'end', value: string) => {
     const updated = { ...form, [field]: value }
-    if (field === 'start' && value > updated.end) updated.end = value
+    if (field === 'start') {
+      if (updated.type === 'H') {
+        updated.end = value
+      } else if (value > updated.end) {
+        updated.end = value
+      }
+    }
     const s = new Date(updated.start), e = new Date(updated.end)
     const diff = Math.max(1, Math.round((e.getTime() - s.getTime()) / 86400000) + 1)
     setForm({ ...updated, days: updated.type === 'H' ? '0.5' : String(diff) })
@@ -630,16 +611,6 @@ function LeaveRequestModal({ open, onClose, employees, defaultEmpId, lockEmpId =
       note: null,
     }])
     if (leaveErr) { setSaving(false); setError('등록 실패: ' + leaveErr.message); return }
-
-    const start = new Date(form.start), end = new Date(form.end)
-    const inserts: Array<{employee_id:string; year:number; month:number; day:number; status:string}> = []
-    for (const dt = new Date(start); dt <= end; dt.setDate(dt.getDate() + 1)) {
-      inserts.push({ employee_id: form.empId, year: dt.getFullYear(), month: dt.getMonth() + 1, day: dt.getDate(), status: form.type })
-    }
-    if (inserts.length > 0) {
-      const { error: schedErr } = await supabase.from('schedules').upsert(inserts, { onConflict: 'employee_id,year,month,day' })
-      if (schedErr) console.warn('근무표 반영 실패:', schedErr.message)
-    }
     setSaving(false)
     onSaved()
   }
@@ -647,7 +618,7 @@ function LeaveRequestModal({ open, onClose, employees, defaultEmpId, lockEmpId =
   return (
     <Modal open={open} onClose={onClose} title="연차 등록" size="sm">
       <div className="bg-blue-50 rounded-xl p-3 mb-4 text-sm text-blue-700">
-        신청 즉시 근무표에 자동 반영됩니다.
+        신청 내역은 관리자가 근무표에 직접 반영합니다.
       </div>
       {error && <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 text-sm text-red-700">{error}</div>}
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -666,7 +637,7 @@ function LeaveRequestModal({ open, onClose, employees, defaultEmpId, lockEmpId =
           <div className="flex gap-2">
             {[{v:'Y',l:'연차'},{v:'H',l:'반차'}].map(({v,l}) => (
               <button key={v} type="button"
-                onClick={() => setForm(f => ({ ...f, type: v as 'H' | 'Y', days: v === 'H' ? '0.5' : f.days }))}
+                onClick={() => setForm(f => ({ ...f, type: v as 'H' | 'Y', days: v === 'H' ? '0.5' : f.days, end: v === 'H' ? f.start : f.end }))}
                 className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-colors ${form.type === v ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
                 {l}
               </button>
@@ -694,10 +665,11 @@ function LeaveRequestModal({ open, onClose, employees, defaultEmpId, lockEmpId =
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-500 mb-1.5">{form.type === 'H' ? '날짜' : '종료일'} *</label>
+            <label className="block text-xs font-semibold text-slate-500 mb-1.5">{form.type === 'H' ? '날짜 (시작일과 동일)' : '종료일'} *</label>
             <input type="date" value={form.end} min={form.start}
               onChange={e => handleDateChange('end', e.target.value)} required
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
+              disabled={form.type === 'H'}
+              className={`w-full border rounded-lg px-3 py-2 text-sm outline-none ${form.type === 'H' ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed' : 'border-slate-200 focus:border-blue-500'}`} />
           </div>
         </div>
         <div>
