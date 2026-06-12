@@ -25,19 +25,22 @@ function StaffView() {
   const [myEmp, setMyEmp]         = useState<Employee | null>(null)
   const [leaveData, setLeaveData] = useState<LeaveData | null>(null)
   const [entries, setEntries]     = useState<LeaveEntry[]>([])
+  const [schedEntries, setSchedEntries] = useState<Array<{month:number; day:number; status:string}>>([])
   const [loading, setLoading]     = useState(true)
   const [reqModal, setReqModal]   = useState(false)
 
   const load = useCallback(async () => {
     if (!myEmpId) { setLoading(false); return }
-    const [empRes, ldRes, leRes] = await Promise.all([
+    const [empRes, ldRes, leRes, schRes] = await Promise.all([
       supabase.from('employees').select('*').eq('id', myEmpId).single(),
       supabase.from('leave_data').select('*').eq('employee_id', myEmpId).eq('year', year).single(),
       supabase.from('leave_entries').select('*').eq('employee_id', myEmpId).eq('year', year).order('start_date'),
+      supabase.from('schedules').select('month,day,status').eq('employee_id', myEmpId).eq('year', year).in('status', ['Y','H']),
     ])
     setMyEmp(empRes.data)
     setLeaveData(ldRes.data)
     setEntries((leRes.data as LeaveEntry[]) || [])
+    setSchedEntries(schRes.data || [])
     setLoading(false)
   }, [myEmpId, year])
 
@@ -51,9 +54,9 @@ function StaffView() {
   )
 
   const total   = leaveData?.total_days ?? 15
-  const usedY   = entries.filter(e => e.type === 'Y').reduce((s, e) => s + e.days, 0)
-  const usedH   = entries.filter(e => e.type === 'H').reduce((s, e) => s + e.days, 0)
-  const used    = usedY + usedH
+  const usedY   = schedEntries.filter(s => s.status === 'Y').length
+  const usedH   = schedEntries.filter(s => s.status === 'H').length
+  const used    = usedY + usedH * 0.5
   const remain  = total - used
 
   return (
@@ -192,7 +195,21 @@ function ManagerView() {
 
   const handleDeleteEntry = async (id: number) => {
     if (!confirm('삭제할까요?')) return
+    const entry = leaveEntries.find(e => e.id === id)
     await supabase.from('leave_entries').delete().eq('id', id)
+    if (entry) {
+      const dates: Array<{y:number; m:number; d:number}> = []
+      const s = new Date(entry.start_date), en = new Date(entry.end_date)
+      for (const dt = new Date(s); dt <= en; dt.setDate(dt.getDate() + 1)) {
+        dates.push({ y: dt.getFullYear(), m: dt.getMonth() + 1, d: dt.getDate() })
+      }
+      await Promise.all(dates.map(({ y, m, d }) =>
+        supabase.from('schedules').delete()
+          .eq('employee_id', entry.employee_id)
+          .eq('year', y).eq('month', m).eq('day', d)
+          .eq('status', entry.type)
+      ))
+    }
     await load()
   }
 

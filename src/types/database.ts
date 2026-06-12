@@ -92,12 +92,38 @@ export interface HrChange {
   employees?: { name: string; dept: string; position: string } | null
 }
 
+export interface ScheduleConfirmed {
+  year: number
+  month: number
+  confirmed_at: string | null
+  confirmed_by: string | null
+}
+
+export interface ScheduleSwapLog {
+  id: number
+  year: number
+  month: number
+  day: number
+  emp1_id: string
+  emp2_id: string
+  emp1_old_status: string | null
+  emp2_old_status: string | null
+  requested_by: string | null
+  swapped_at: string
+}
+
+export interface OffQuota {
+  dept: string
+  max_persons: number
+  updated_at: string
+  updated_by: string | null
+}
+
 type EmployeeRow = Employee
 type EmployeeInsert = Omit<Employee, 'created_at'>
 type EmployeeUpdate = Partial<EmployeeInsert>
 
 type LeaveEntryInsert = Omit<LeaveEntry, 'id' | 'created_at'>
-type LeaveRequestInsert = Omit<LeaveRequest, 'id' | 'created_at' | 'updated_at' | 'employees'>
 type HrChangeInsert = Omit<HrChange, 'id' | 'created_at' | 'employees'>
 
 export type Database = {
@@ -133,16 +159,28 @@ export type Database = {
         Update: Partial<LeaveEntryInsert>
         Relationships: []
       }
-      leave_requests: {
-        Row: LeaveRequest
-        Insert: LeaveRequestInsert
-        Update: Partial<LeaveRequestInsert>
-        Relationships: []
-      }
       hr_changes: {
         Row: HrChange
         Insert: HrChangeInsert
         Update: Partial<HrChangeInsert>
+        Relationships: []
+      }
+      schedule_confirmed: {
+        Row: ScheduleConfirmed
+        Insert: ScheduleConfirmed
+        Update: Partial<ScheduleConfirmed>
+        Relationships: []
+      }
+      off_quotas: {
+        Row: OffQuota
+        Insert: OffQuota
+        Update: Partial<OffQuota>
+        Relationships: []
+      }
+      schedule_swap_logs: {
+        Row: ScheduleSwapLog
+        Insert: Omit<ScheduleSwapLog, 'id' | 'swapped_at'>
+        Update: never
         Relationships: []
       }
     }
@@ -159,6 +197,10 @@ export type Database = {
       my_employee_id: {
         Args: { [_ in never]: never }
         Returns: string
+      }
+      swap_schedules: {
+        Args: { p_emp1: string; p_emp2: string; p_year: number; p_month: number; p_day: number }
+        Returns: void
       }
     }
     Enums: { [_ in never]: never }
