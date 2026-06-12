@@ -51,6 +51,8 @@ export default function Schedule() {
   })
   const [showQuotaSettings, setShowQuotaSettings] = useState(false)
   const [showNotice, setShowNotice] = useState(true)
+  const [clipStatus, setClipStatus] = useState<WorkStatus | null>(null)
+  const [clipSrc, setClipSrc]       = useState<{empId:string; day:number} | null>(null)
   const pickerRef        = useRef<HTMLDivElement>(null)
   const tableContainerRef = useRef<HTMLDivElement>(null)
 
@@ -128,7 +130,16 @@ export default function Schedule() {
     if (!picker || !canEdit) return
     const KEY_MAP: Record<string, WorkStatus> = { d:'D', s:'S', h:'H', y:'Y', o:'OFF' }
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setPicker(null); return }
+      if (e.key === 'Escape') { setPicker(null); setClipStatus(null); setClipSrc(null); return }
+      if (e.ctrlKey && e.key === 'c') {
+        const st = ((schMap[picker.empId]||{})[picker.day] ?? '') as WorkStatus
+        setClipStatus(st); setClipSrc({ empId: picker.empId, day: picker.day })
+        e.preventDefault(); return
+      }
+      if (e.ctrlKey && e.key === 'v' && clipStatus !== null) {
+        applyStatus(picker.empId, picker.day, clipStatus)
+        e.preventDefault(); return
+      }
       if (e.key === 'ArrowLeft')  { e.preventDefault(); setPicker(p => p ? { ...p, day: Math.max(1, p.day - 1) } : null); return }
       if (e.key === 'ArrowRight') { e.preventDefault(); setPicker(p => p ? { ...p, day: Math.min(dim, p.day + 1) } : null); return }
       if (e.key === 'ArrowUp')    { e.preventDefault(); setPicker(p => { if (!p) return null; const i = employees.findIndex(e => e.id === p.empId); return { ...p, empId: employees[Math.max(0, i-1)]?.id ?? p.empId } }); return }
@@ -142,7 +153,14 @@ export default function Schedule() {
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [picker, canEdit, applyStatus, employees, dim])
+  }, [picker, canEdit, applyStatus, employees, dim, clipStatus, schMap])
+
+  useEffect(() => {
+    if (clipStatus === null || picker) return
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') { setClipStatus(null); setClipSrc(null) } }
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [clipStatus, picker])
 
   useEffect(() => {
     if (!monthPickerOpen) return
@@ -154,6 +172,11 @@ export default function Schedule() {
   const handleCellClick = (e: React.MouseEvent, empId: string, day: number) => {
     e.stopPropagation()
     if (canEdit) {
+      if (clipStatus !== null) {
+        applyStatus(empId, day, clipStatus)
+        setClipSrc({ empId, day })
+        return
+      }
       const rect = (e.target as HTMLElement).getBoundingClientRect()
       setPicker({ x: Math.min(rect.left, window.innerWidth - 300), y: rect.bottom + 4, empId, day })
     } else if (profile?.employee_id === empId && confirmed) {
@@ -421,23 +444,6 @@ export default function Schedule() {
 
   if (loading) return <div className="flex h-full items-center justify-center text-slate-400">로딩 중...</div>
 
-  if (isStaff && !confirmed) {
-    return (
-      <div className="flex flex-col h-full items-center justify-center text-center p-8">
-        <div className="text-6xl mb-5">📋</div>
-        <div className="text-slate-700 font-bold text-xl">{year}년 {month}월 근무표</div>
-        <div className="text-slate-500 text-sm mt-3">아직 공개되지 않았습니다</div>
-        <div className="text-slate-300 text-xs mt-1.5">관리자가 확정하면 확인할 수 있습니다</div>
-        <div className="flex items-center gap-3 mt-8">
-          <button onClick={() => { let m=month-1,y=year; if(m<1){m=12;y--}; setMonth(m);setYear(y) }}
-            className="bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-sm font-semibold">◀</button>
-          <span className="font-bold text-slate-600 text-sm">{year}년 {month}월</span>
-          <button onClick={() => { let m=month+1,y=year; if(m>12){m=1;y++}; setMonth(m);setYear(y) }}
-            className="bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-sm font-semibold">▶</button>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -544,6 +550,13 @@ export default function Schedule() {
             </div>
           )}
         </div>
+
+        {/* 직원: 미확정 안내 배너 */}
+        {isStaff && !confirmed && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-center gap-2 text-xs text-amber-700 font-medium no-print">
+            <span>⏳</span> 아직 확정되지 않은 근무표입니다. 관리자가 확정하기 전까지 변경될 수 있습니다.
+          </div>
+        )}
 
         {/* 근무표 공지 */}
         {showNotice && (() => {
@@ -712,10 +725,20 @@ export default function Schedule() {
                             const w=dow(d), isSel=selectedDay===d
                             const isClickable=canEdit||(isMyRow&&confirmed)
                             const isPickerOn=canEdit&&picker?.empId===e.id&&picker?.day===d
+                            const isCopiedSrc=clipSrc?.empId===e.id&&clipSrc?.day===d
+                            const isPasteTarget=clipStatus!==null&&canEdit
                             return (
                               <td key={d} onClick={ev => isClickable?handleCellClick(ev,e.id,d):undefined}
                                 className={`text-center transition-colors ${isClickable?'cursor-pointer':''}`}
-                                style={{background:isSel?'#dbeafe':'#ffffff',borderRight:w===6?'2px solid #bfdbfe':w===0?'2px solid #fecaca':undefined,outline:isPickerOn?'2px solid #2563eb':undefined,minWidth:40,padding:'4px 3px',position:isPickerOn?'relative':undefined,zIndex:isPickerOn?1:undefined}}>
+                                style={{
+                                  background:isSel?'#dbeafe':'#ffffff',
+                                  borderRight:w===6?'2px solid #bfdbfe':w===0?'2px solid #fecaca':undefined,
+                                  outline:isPickerOn?'2px solid #2563eb':isCopiedSrc?'2px dashed #2563eb':undefined,
+                                  minWidth:40,padding:'4px 3px',
+                                  position:isPickerOn||isCopiedSrc?'relative':undefined,
+                                  zIndex:isPickerOn||isCopiedSrc?1:undefined,
+                                  opacity:isPasteTarget&&!isClickable?1:undefined,
+                                }}>
                                 {st && <span style={{display:'inline-block',background:cfg.bg,color:cfg.color,borderRadius:4,padding:'2px 5px',fontWeight:800,fontSize:11,lineHeight:1.4,minWidth:30}}>{st}</span>}
                               </td>
                             )
@@ -759,6 +782,17 @@ export default function Schedule() {
           </div>
         </div>
       </div>
+
+      {clipStatus !== null && canEdit && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[400] bg-slate-800 text-white px-4 py-2.5 rounded-full text-xs font-semibold shadow-2xl flex items-center gap-2.5 select-none pointer-events-none">
+          <span style={{
+            background: clipStatus ? STATUS_CFG[clipStatus].bg : '#e2e8f0',
+            color: clipStatus && STATUS_CFG[clipStatus].color !== 'transparent' ? STATUS_CFG[clipStatus].color : '#64748b',
+            padding:'2px 8px', borderRadius:4, fontWeight:800, fontSize:11
+          }}>{clipStatus || '빈칸'}</span>
+          붙여넣기 모드 — 셀 클릭 시 적용 · Esc 취소
+        </div>
+      )}
 
       {picker && canEdit && (
         <div ref={pickerRef} style={{position:'fixed',left:picker.x,top:picker.y,zIndex:300}}
