@@ -5,10 +5,23 @@ import type { Employee, Schedule as SchRow } from '../types/database'
 import Modal from '../components/Modal'
 import * as XLSX from 'xlsx-js-style'
 import html2canvas from 'html2canvas'
-import { DEPTS, STATS_DEPTS, DEPT_COLORS, DAYS_KR, STATUS_ORDER, STATUS_CFG, SCHEDULE_GROUPS } from '../constants'
+import { DEPTS, STATS_DEPTS, DEPT_COLORS, DAYS_KR, STATUS_ORDER, STATUS_CFG, SCHEDULE_GROUPS, swapGroupOf } from '../constants'
 import type { WorkStatus } from '../constants'
 
 type SchMap = Record<string, Record<number, WorkStatus>>
+
+interface SwapReq {
+  id: number; year: number; month: number; day: number
+  requester_emp: string; target_emp: string
+  requester_status: string | null; target_status: string | null
+  status: string; created_at: string
+}
+interface SwapLog {
+  id: number; year: number; month: number; day: number
+  emp1_id: string; emp2_id: string
+  emp1_old_status: string | null; emp2_old_status: string | null
+  requested_by: string | null; swapped_at: string
+}
 
 export default function Schedule() {
   const { profile } = useAuth()
@@ -36,8 +49,12 @@ export default function Schedule() {
   const [showNotice, setShowNotice] = useState(true)
   const [clipStatus, setClipStatus] = useState<WorkStatus | null>(null)
   const [clipSrc, setClipSrc]       = useState<{empId:string; day:number} | null>(null)
+  const [swapReqs, setSwapReqs]     = useState<SwapReq[]>([])
+  const [logModal, setLogModal]     = useState(false)
   const pickerRef        = useRef<HTMLDivElement>(null)
   const tableContainerRef = useRef<HTMLDivElement>(null)
+
+  const myEmpId = profile?.employee_id ?? ''
 
   const dim  = new Date(year, month, 0).getDate()
   const dow  = (d: number) => new Date(year, month - 1, d).getDay()
@@ -71,6 +88,11 @@ export default function Schedule() {
         setOffQuotas(prev => ({ ...prev, ...qMap }))
       }
     } catch { /* defaults 유지 */ }
+    try {
+      const { data: reqData } = await supabase.from('schedule_swap_requests')
+        .select('*').eq('year', year).eq('month', month).order('created_at', { ascending: false })
+      setSwapReqs((reqData as SwapReq[]) || [])
+    } catch { setSwapReqs([]) }
     setLoading(false)
   }, [year, month])
 
@@ -166,6 +188,20 @@ export default function Schedule() {
       setSwapModal({ empId, day })
     }
   }
+
+  const respondSwap = async (id: number, approve: boolean) => {
+    const { error } = await supabase.rpc('respond_swap_request', { p_request_id: id, p_approve: approve })
+    if (error) { alert(`처리 실패: ${error.message}`); return }
+    await load()
+  }
+  const cancelSwap = async (id: number) => {
+    if (!confirm('교환 요청을 취소할까요?')) return
+    await supabase.from('schedule_swap_requests').delete().eq('id', id)
+    await load()
+  }
+  const empName = (id: string) => employees.find(e => e.id === id)?.name || id
+  const receivedReqs = swapReqs.filter(r => r.target_emp === myEmpId && r.status === 'pending')
+  const sentReqs     = swapReqs.filter(r => r.requester_emp === myEmpId && r.status === 'pending')
 
   const grouped: Record<string, Employee[]> = {}
   DEPTS.forEach(d => { grouped[d] = [] })
@@ -522,6 +558,10 @@ export default function Schedule() {
             </div>
 
             <div className="flex items-center gap-1.5 ml-auto flex-wrap">
+              <button onClick={() => setLogModal(true)} className="flex items-center gap-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 px-2.5 py-1.5 rounded-lg text-xs font-semibold">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
+                교환 기록
+              </button>
               <button onClick={exportExcel} className="flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-2.5 py-1.5 rounded-lg text-xs font-semibold">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                 엑셀(전체)
@@ -584,6 +624,49 @@ export default function Schedule() {
         {isStaff && !confirmed && (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-center gap-2 text-xs text-amber-700 font-medium no-print">
             <span>⏳</span> 아직 확정되지 않은 근무표입니다. 관리자가 확정하기 전까지 변경될 수 있습니다.
+          </div>
+        )}
+
+        {/* 받은 교환 요청 (대상자) */}
+        {receivedReqs.length > 0 && (
+          <div className="bg-white border-2 border-blue-300 rounded-2xl p-4 no-print space-y-2.5">
+            <div className="flex items-center gap-2 text-sm font-bold text-blue-700">
+              <span>🔔</span> 받은 근무 교환 요청 <span className="bg-blue-600 text-white text-xs px-1.5 py-0.5 rounded-full">{receivedReqs.length}</span>
+            </div>
+            {receivedReqs.map(r => (
+              <div key={r.id} className="flex items-center gap-3 flex-wrap bg-blue-50/60 rounded-xl px-3 py-2.5">
+                <div className="text-sm text-slate-700 flex items-center gap-2 flex-1 min-w-0">
+                  <strong>{empName(r.requester_emp)}</strong>님이
+                  <strong className="text-blue-700">{r.month}/{r.day}</strong> 교환 요청
+                  <span className="inline-flex items-center gap-1 ml-1">
+                    <span className="text-xs text-slate-400">내</span>
+                    <span className="px-1.5 py-0.5 rounded text-xs font-bold" style={{background:STATUS_CFG[(r.target_status||'') as WorkStatus]?.bg||'#f1f5f9',color:STATUS_CFG[(r.target_status||'') as WorkStatus]?.color||'#64748b'}}>{r.target_status||'없음'}</span>
+                    <span className="text-slate-400">⇌</span>
+                    <span className="px-1.5 py-0.5 rounded text-xs font-bold" style={{background:STATUS_CFG[(r.requester_status||'') as WorkStatus]?.bg||'#f1f5f9',color:STATUS_CFG[(r.requester_status||'') as WorkStatus]?.color||'#64748b'}}>{r.requester_status||'없음'}</span>
+                  </span>
+                </div>
+                <div className="flex gap-2 flex-shrink-0">
+                  <button onClick={() => respondSwap(r.id, true)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">수락</button>
+                  <button onClick={() => respondSwap(r.id, false)}
+                    className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold">거절</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 보낸 교환 요청 (요청자) */}
+        {sentReqs.length > 0 && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 no-print space-y-2">
+            <div className="text-xs font-bold text-slate-500">보낸 교환 요청 (대기 중)</div>
+            {sentReqs.map(r => (
+              <div key={r.id} className="flex items-center gap-2 text-sm text-slate-600 flex-wrap">
+                <strong className="text-slate-700">{empName(r.target_emp)}</strong>님에게
+                <strong>{r.month}/{r.day}</strong> 교환 요청 · <span className="text-amber-600 text-xs font-semibold">상대 수락 대기</span>
+                <button onClick={() => cancelSwap(r.id)} className="ml-auto text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-red-50">취소</button>
+              </div>
+            ))}
           </div>
         )}
 
@@ -858,7 +941,83 @@ export default function Schedule() {
           employees={employees} schMap={schMap}
           onClose={() => setSwapModal(null)} onSwapped={async () => { setSwapModal(null); await load() }} />
       )}
+
+      {logModal && (
+        <SwapLogModal year={year} month={month} employees={employees} onClose={() => setLogModal(false)} />
+      )}
     </div>
+  )
+}
+
+// ── Swap Log Modal (교환/변경 기록) ──────────────────────────────────────────────
+function SwapLogModal({ year, month, employees, onClose }:
+  { year:number; month:number; employees:Employee[]; onClose:()=>void }) {
+  const [logs, setLogs]       = useState<SwapLog[]>([])
+  const [reqs, setReqs]       = useState<SwapReq[]>([])
+  const [loading, setLoading] = useState(true)
+  const name = (id:string) => employees.find(e => e.id === id)?.name || id
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from('schedule_swap_logs').select('*').eq('year', year).eq('month', month).order('swapped_at', { ascending: false }),
+      supabase.from('schedule_swap_requests').select('*').eq('year', year).eq('month', month).neq('status', 'pending').order('created_at', { ascending: false }),
+    ]).then(([lg, rq]: [{data:SwapLog[]|null}, {data:SwapReq[]|null}]) => {
+      setLogs(lg.data || []); setReqs(rq.data || []); setLoading(false)
+    })
+  }, [year, month])
+
+  const chip = (st:string|null) => (
+    <span className="px-1.5 py-0.5 rounded text-xs font-bold"
+      style={{background:STATUS_CFG[(st||'') as WorkStatus]?.bg||'#f1f5f9',color:STATUS_CFG[(st||'') as WorkStatus]?.color||'#64748b'}}>{st||'없음'}</span>
+  )
+  const fmtTime = (s:string) => new Date(s).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false})
+
+  return (
+    <Modal open={true} onClose={onClose} title={`${year}년 ${month}월 근무 교환 기록`} size="md">
+      {loading ? (
+        <p className="text-sm text-slate-400 text-center py-8">불러오는 중...</p>
+      ) : (
+        <div className="space-y-5">
+          <div>
+            <div className="text-xs font-bold text-slate-500 mb-2">완료된 교환 <span className="text-slate-400 font-normal">{logs.length}건</span></div>
+            {logs.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-6 bg-slate-50 rounded-xl">완료된 교환이 없습니다</p>
+            ) : (
+              <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl max-h-72 overflow-y-auto">
+                {logs.map(l => (
+                  <div key={l.id} className="flex items-center gap-2 px-3 py-2.5 text-sm flex-wrap">
+                    <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full flex-shrink-0">{l.month}/{l.day}</span>
+                    <span className="font-semibold text-slate-700">{name(l.emp1_id)}</span>
+                    {chip(l.emp1_old_status)}
+                    <span className="text-slate-400">⇌</span>
+                    <span className="font-semibold text-slate-700">{name(l.emp2_id)}</span>
+                    {chip(l.emp2_old_status)}
+                    <span className="ml-auto text-xs text-slate-400">{fmtTime(l.swapped_at)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {reqs.length > 0 && (
+            <div>
+              <div className="text-xs font-bold text-slate-500 mb-2">요청 처리 내역</div>
+              <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl max-h-52 overflow-y-auto">
+                {reqs.map(r => (
+                  <div key={r.id} className="flex items-center gap-2 px-3 py-2 text-sm flex-wrap">
+                    <span className="text-xs text-slate-500 flex-shrink-0">{r.month}/{r.day}</span>
+                    <span className="text-slate-600">{name(r.requester_emp)} → {name(r.target_emp)}</span>
+                    <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded-full ${r.status==='approved'?'bg-green-100 text-green-700':r.status==='rejected'?'bg-red-100 text-red-700':'bg-slate-100 text-slate-500'}`}>
+                      {r.status==='approved'?'수락됨':r.status==='rejected'?'거절됨':'취소됨'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </Modal>
   )
 }
 
@@ -872,7 +1031,8 @@ function SwapModal({ empId, day, year, month, employees, schMap, onClose, onSwap
   const [targetId, setTargetId] = useState('')
   const [saving, setSaving]     = useState(false)
   const myEmp    = employees.find(e => e.id === empId)
-  const sameTeam = employees.filter(e => e.dept === myEmp?.dept && e.id !== empId)
+  const myGroup  = swapGroupOf(myEmp?.dept || '')
+  const sameTeam = employees.filter(e => swapGroupOf(e.dept) === myGroup && e.id !== empId)
   const mySt     = schMap[empId]?.[day] || ''
   const targetSt = targetId ? (schMap[targetId]?.[day]||'') : ''
   const badge    = (st: string) => (
@@ -881,19 +1041,20 @@ function SwapModal({ empId, day, year, month, employees, schMap, onClose, onSwap
       {st||'없음'}
     </span>
   )
-  const handleSwap = async () => {
+  const handleRequest = async () => {
     if (!targetId) return
     setSaving(true)
-    const { error } = await supabase.rpc('swap_schedules', { p_emp1:empId, p_emp2:targetId, p_year:year, p_month:month, p_day:day })
+    const { error } = await supabase.rpc('request_swap', { p_target:targetId, p_year:year, p_month:month, p_day:day })
     setSaving(false)
-    if (error) { alert(`교환 실패: ${error.message}`); return }
+    if (error) { alert(`요청 실패: ${error.message}`); return }
     onSwapped()
   }
   return (
-    <Modal open={true} onClose={onClose} title="근무 교환 신청" size="sm">
+    <Modal open={true} onClose={onClose} title="근무 교환 요청" size="sm">
       <div className="space-y-4">
         <div className="bg-blue-50 rounded-xl p-3 text-sm text-blue-700">
-          <strong>{month}월 {day}일</strong> 근무를 같은 팀 직원과 1:1 교환합니다.
+          <strong>{month}월 {day}일</strong> 근무를 같은 파트 직원에게 1:1 교환 요청합니다.<br />
+          <span className="text-xs text-blue-500">상대가 수락하면 교환이 완료됩니다.</span>
         </div>
         <div className="flex items-center gap-4">
           <div className="flex-1 text-center"><div className="text-xs text-slate-400 mb-1">나 ({myEmp?.name})</div>{badge(mySt)}</div>
@@ -901,19 +1062,19 @@ function SwapModal({ empId, day, year, month, employees, schMap, onClose, onSwap
           <div className="flex-1 text-center"><div className="text-xs text-slate-400 mb-1">교환 상대</div>{badge(targetSt)}</div>
         </div>
         <div>
-          <label className="block text-xs font-semibold text-slate-500 mb-1.5">팀원 선택</label>
+          <label className="block text-xs font-semibold text-slate-500 mb-1.5">교환 상대 선택 ({myGroup} 파트)</label>
           <select value={targetId} onChange={e => setTargetId(e.target.value)}
             className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500">
             <option value="">선택</option>
-            {sameTeam.map(e => <option key={e.id} value={e.id}>{e.name} — {schMap[e.id]?.[day]||'없음'}</option>)}
+            {sameTeam.map(e => <option key={e.id} value={e.id}>{e.name} ({e.position}) — {schMap[e.id]?.[day]||'없음'}</option>)}
           </select>
-          {sameTeam.length===0 && <p className="text-xs text-red-500 mt-1">같은 팀에 교환 가능한 직원이 없습니다</p>}
+          {sameTeam.length===0 && <p className="text-xs text-red-500 mt-1">같은 파트에 교환 가능한 직원이 없습니다</p>}
         </div>
         <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
           <button onClick={onClose} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-semibold">취소</button>
-          <button onClick={handleSwap} disabled={saving||!targetId}
+          <button onClick={handleRequest} disabled={saving||!targetId}
             className="bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-semibold">
-            {saving?'교환 중...':'교환하기'}
+            {saving?'요청 중...':'교환 요청'}
           </button>
         </div>
       </div>

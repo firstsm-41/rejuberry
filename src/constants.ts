@@ -52,6 +52,10 @@ export const SCHEDULE_GROUPS: Array<{ label: string; depts: string[]; color: str
   { label: '미분류',      depts: ['미분류'],             color: '#6b7280' },
 ]
 
+// 근무 교환 가능 "파트 그룹" — 총괄실장+실장, 대표원장+부원장은 같은 파트로 묶임 (DB swap_group과 일치)
+export const swapGroupOf = (dept: string): string =>
+  SCHEDULE_GROUPS.find(g => g.depts.includes(dept))?.label ?? dept
+
 export const DEFAULT_OFF_QUOTAS: Record<string, number> = {
   '실장': 1, '코디': 1, '간호': 1, '피부1(시술)': 1, '피부2(관리)': 1,
 }
