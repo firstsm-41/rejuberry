@@ -583,6 +583,13 @@ function LeaveRequestModal({ open, onClose, employees, defaultEmpId, lockEmpId =
 
   useEffect(() => { setForm(f => ({ ...f, empId: defaultEmpId })); setError('') }, [defaultEmpId, open])
 
+  const addDays = (dateStr: string, n: number) => {
+    const [y, m, d] = dateStr.split('-').map(Number)
+    const dt = new Date(y, m - 1, d + n)
+    const pad = (x: number) => String(x).padStart(2, '0')
+    return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`
+  }
+
   const handleDateChange = (field: 'start' | 'end', value: string) => {
     const updated = { ...form, [field]: value }
     if (field === 'start') {
@@ -595,6 +602,13 @@ function LeaveRequestModal({ open, onClose, employees, defaultEmpId, lockEmpId =
     const s = new Date(updated.start), e = new Date(updated.end)
     const diff = Math.max(1, Math.round((e.getTime() - s.getTime()) / 86400000) + 1)
     setForm({ ...updated, days: updated.type === 'H' ? '0.5' : String(diff) })
+  }
+
+  // 일수 변경 → 종료일 자동 계산 (반차는 0.5일 고정)
+  const handleDaysChange = (value: string) => {
+    if (form.type === 'H') { setForm(f => ({ ...f, days: '0.5' })); return }
+    const n = Math.max(1, Math.floor(parseFloat(value) || 1))
+    setForm(f => ({ ...f, days: value, end: addDays(f.start, n - 1) }))
   }
 
   const handleSubmit = async (ev: React.FormEvent) => {
@@ -675,9 +689,11 @@ function LeaveRequestModal({ open, onClose, employees, defaultEmpId, lockEmpId =
         </div>
         <div>
           <label className="block text-xs font-semibold text-slate-500 mb-1.5">일수</label>
-          <input type="number" step="0.5" min="0.5" value={form.days}
-            onChange={e => setForm(f => ({ ...f, days: e.target.value }))}
-            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
+          <input type="number" step={form.type === 'H' ? 0.5 : 1} min={form.type === 'H' ? 0.5 : 1}
+            value={form.days} disabled={form.type === 'H'}
+            onChange={e => handleDaysChange(e.target.value)}
+            className={`w-full border rounded-lg px-3 py-2 text-sm outline-none ${form.type === 'H' ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed' : 'border-slate-200 focus:border-blue-500'}`} />
+          <p className="text-xs text-slate-400 mt-1">{form.type === 'H' ? '반차는 0.5일 고정' : '일수를 바꾸면 종료일이 자동 조정됩니다'}</p>
         </div>
         <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
           <button type="button" onClick={onClose} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-semibold">취소</button>

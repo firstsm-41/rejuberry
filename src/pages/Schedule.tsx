@@ -67,6 +67,14 @@ export default function Schedule() {
   const isCurrentMonth = year === todayY && month === todayM
   const statsDay = selectedDay ?? (isCurrentMonth ? todayD : null)
 
+  // 좌측 식별 컬럼 고정(sticky) — 가로 스크롤 시 이름이 왼쪽에 남도록
+  const ID_W = 38, NAME_W = 54, POS_W = 78
+  const idLeft = 0
+  const nameLeft = canEdit ? ID_W : 0
+  const posLeft  = canEdit ? ID_W + NAME_W : NAME_W
+  const stickyHeadBase = 'sticky top-0 z-20 bg-white whitespace-nowrap text-xs'
+  const stickyCellCls  = 'sticky z-[5] whitespace-nowrap'
+
   const load = useCallback(async () => {
     setLoading(true)
     const [empsRes, schRes] = await Promise.all([
@@ -790,9 +798,9 @@ export default function Schedule() {
             <table style={{borderCollapse:'separate',borderSpacing:0,minWidth:'max-content'}}>
               <thead>
                 <tr>
-                  {canEdit && <th className="px-2 py-2 text-xs text-slate-500 bg-white sticky top-0 z-10 whitespace-nowrap" style={{minWidth:40}}>사번</th>}
-                  <th className="px-2 py-2 text-xs text-slate-500 bg-white sticky top-0 z-10 whitespace-nowrap" style={{minWidth:52}}>이름</th>
-                  <th className="px-2 py-2 text-xs text-slate-500 bg-white sticky top-0 z-10 whitespace-nowrap" style={{minWidth:72}}>직급</th>
+                  {canEdit && <th className={`px-2 py-2 text-slate-500 ${stickyHeadBase}`} style={{minWidth:ID_W,width:ID_W,left:idLeft}}>사번</th>}
+                  <th className={`px-2 py-2 text-slate-500 ${stickyHeadBase}`} style={{minWidth:NAME_W,width:NAME_W,left:nameLeft,boxShadow:'2px 0 0 #f1f5f9'}}>이름</th>
+                  <th className={`px-2 py-2 text-slate-500 ${stickyHeadBase}`} style={{minWidth:POS_W,width:POS_W,left:posLeft,boxShadow:'2px 0 4px -2px rgba(0,0,0,0.12)'}}>직급</th>
                   {Array.from({length:dim},(_,i)=>i+1).map(d => {
                     const w=dow(d), isSat=w===6, isSun=w===0
                     const isToday=isCurrentMonth&&d===todayD, isSel=selectedDay===d
@@ -833,7 +841,7 @@ export default function Schedule() {
                   return [
                     <tr key={`grp-${group.label}`}>
                       <td colSpan={span} style={{background:col+'10',padding:'4px 12px',fontSize:11,fontWeight:700,color:col,borderBottom:'1px solid #e2e8f0'}}>
-                        ▸ {group.label}
+                        <span style={{position:'sticky',left:12,display:'inline-block'}}>▸ {group.label}</span>
                       </td>
                     </tr>,
                     ...emps.map(e => {
@@ -841,11 +849,12 @@ export default function Schedule() {
                       const sum=canEdit?calcSummary(e.id):null
                       const isMyRow=isStaff&&profile?.employee_id===e.id
                       const rowBg=(DEPT_COLORS[e.dept]||'#000000')+'0c'
+                      const solidBg=isMyRow?'#eff6ff':'#ffffff'
                       return (
                         <tr key={e.id} style={{background:isMyRow?'#eff6ff':rowBg}} className="hover:brightness-95 transition-all">
-                          {canEdit && <td className="px-2 py-1.5 font-mono text-xs text-slate-400 whitespace-nowrap">{e.id}</td>}
-                          <td className="px-2 py-1.5 text-xs font-semibold text-slate-700 whitespace-nowrap">{e.name}</td>
-                          <td className="px-2 py-1.5 text-xs text-slate-400 whitespace-nowrap">{e.position}</td>
+                          {canEdit && <td className={`px-2 py-1.5 font-mono text-xs text-slate-400 ${stickyCellCls}`} style={{left:idLeft,width:ID_W,minWidth:ID_W,background:solidBg}}>{e.id}</td>}
+                          <td className={`px-2 py-1.5 text-xs font-semibold text-slate-700 ${stickyCellCls}`} style={{left:nameLeft,width:NAME_W,minWidth:NAME_W,background:solidBg}}>{e.name}</td>
+                          <td className={`px-2 py-1.5 text-xs text-slate-400 ${stickyCellCls} overflow-hidden text-ellipsis`} style={{left:posLeft,width:POS_W,minWidth:POS_W,maxWidth:POS_W,background:solidBg,boxShadow:'2px 0 4px -2px rgba(0,0,0,0.12)'}}>{e.position}</td>
                           {Array.from({length:dim},(_,i)=>i+1).map(d => {
                             const st=sch[d]||'', cfg=STATUS_CFG[st]||STATUS_CFG['']
                             const w=dow(d), isSel=selectedDay===d
@@ -885,7 +894,7 @@ export default function Schedule() {
                     const col=DEPT_COLORS[dept]||'#64748b'
                     return (
                       <tr key={`s-${dept}`}>
-                        <td colSpan={3} className="text-right pr-2 text-xs font-bold whitespace-nowrap py-1" style={{background:col+'12',color:col}}>{dept}</td>
+                        <td colSpan={3} className="text-right pr-2 text-xs font-bold whitespace-nowrap py-1 sticky z-[5]" style={{left:idLeft,background:'#f8fafc',color:col,boxShadow:'2px 0 4px -2px rgba(0,0,0,0.12)'}}>{dept}</td>
                         {Array.from({length:dim},(_,i)=>i+1).map(d => {
                           const v=deptDayWork[dept][d]||0, w=dow(d), isSel=selectedDay===d
                           return <td key={d} className="text-center text-xs font-semibold py-1" style={{background:isSel?col+'35':col+'12',color:col,borderRight:w===6?'2px solid #bfdbfe':w===0?'2px solid #fecaca':undefined}}>{fmt(v)}</td>
@@ -895,7 +904,7 @@ export default function Schedule() {
                     )
                   })}
                   <tr>
-                    <td colSpan={3} className="text-right pr-2 text-xs font-bold text-blue-900 whitespace-nowrap py-1" style={{background:'#dbeafe'}}>합계 근무</td>
+                    <td colSpan={3} className="text-right pr-2 text-xs font-bold text-blue-900 whitespace-nowrap py-1 sticky z-[5]" style={{left:idLeft,background:'#dbeafe',boxShadow:'2px 0 4px -2px rgba(0,0,0,0.12)'}}>합계 근무</td>
                     {Array.from({length:dim},(_,i)=>i+1).map(d => {
                       const v=totalDayWork[d]||0, w=dow(d), isSel=selectedDay===d
                       return <td key={d} className="text-center text-xs font-bold text-blue-900 py-1" style={{background:isSel?'#bfdbfe':'#dbeafe',borderRight:w===6?'2px solid #bfdbfe':w===0?'2px solid #fecaca':undefined}}>{fmt(v)}</td>

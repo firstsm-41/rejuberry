@@ -174,8 +174,8 @@ export default function Dashboard() {
                       <div key={e.id} className="px-5 py-2.5 flex items-center gap-3 hover:bg-slate-50/70 transition-colors">
                         <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
                           style={{ background: col + 'bb' }}>{e.name[0]}</div>
-                        <span className="text-sm font-medium text-slate-700 w-16 flex-shrink-0">{e.name}</span>
-                        <span className="text-xs text-slate-400 flex-1">{e.position}</span>
+                        <span className="text-sm font-medium text-slate-700 w-16 flex-shrink-0 whitespace-nowrap">{e.name}</span>
+                        <span className="text-xs text-slate-400 flex-1 whitespace-nowrap truncate">{e.position}</span>
                         <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ background: cfg.bg, color: cfg.color }}>
                           {cfg.label}
                         </span>
