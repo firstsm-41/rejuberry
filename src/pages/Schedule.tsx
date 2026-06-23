@@ -377,77 +377,50 @@ export default function Schedule() {
     }
     const days = Array.from({length:dim},(_,i)=>i+1)
     const wkBorder = (w:number) => w===6?'border-right:2px solid #bfdbfe;':w===0?'border-right:2px solid #fecaca;':''
-    const span = (canEdit?1:0) + 2 + dim + (canEdit?5:0)
+    // 공통: 세로 가운데 정렬 + 줄간격 고정 (html2canvas 글자 쏠림 방지)
+    const VA = 'vertical-align:middle;line-height:1.1;'
+    // 마케팅·미분류 제외 (근무 파트만)
+    const exportGroups = SCHEDULE_GROUPS.filter(g => g.label !== '마케팅' && g.label !== '미분류')
 
     // ── 헤더 ──
-    const thFix = `border:${B};background:#ffffff;color:#64748b;font-weight:700;font-size:10px;padding:4px 6px;text-align:left;white-space:nowrap`
+    const thFix = `border:${B};${VA}background:#ffffff;color:#64748b;font-weight:700;font-size:10px;padding:6px;text-align:left;white-space:nowrap`
     const headFixed = (canEdit ? `<th style="${thFix}">사번</th>` : '') +
       `<th style="${thFix}">이름</th><th style="${thFix}">직급</th>`
     const headDays = days.map(d => {
       const w = dow(d), tc = w===6?'#3b82f6':w===0?'#ef4444':'#475569'
-      return `<th style="border:${B};${wkBorder(w)}background:#f8fafc;padding:3px 2px;text-align:center;min-width:30px">`
-        + `<div style="font-weight:800;font-size:10px;color:${tc}">${d}</div>`
-        + `<div style="font-size:8px;color:${tc};opacity:.7">${DAYS_KR[w]}</div></th>`
+      return `<th style="border:${B};${VA}${wkBorder(w)}background:#f8fafc;padding:4px 2px;text-align:center;min-width:30px">`
+        + `<div style="font-weight:800;font-size:10px;color:${tc};line-height:1.2">${d}</div>`
+        + `<div style="font-size:8px;color:${tc};opacity:.7;line-height:1.2">${DAYS_KR[w]}</div></th>`
     }).join('')
-    const summaryKeys: WorkStatus[] = ['D','S','H','OFF','Y']
-    const headSummary = canEdit ? summaryKeys.map(s =>
-      `<th style="border:${B};background:${STATUS_CFG[s].bg};color:${STATUS_CFG[s].color};font-weight:800;font-size:10px;padding:4px;text-align:center;min-width:28px">${STATUS_CFG[s].label}</th>`
-    ).join('') : ''
 
-    // ── 본문 (그룹별) ──
-    const bodyGroups = SCHEDULE_GROUPS.map(group => {
+    // ── 본문 (그룹별, 마케팅·미분류 제외, 요약 컬럼 없음) ──
+    const span = (canEdit?1:0) + 2 + dim
+    const bodyGroups = exportGroups.map(group => {
       const emps = group.depts.flatMap(d => grouped[d] || [])
       if (!emps.length) return ''
       const col = group.color
-      const header = `<tr><td colspan="${span}" style="border:${B};background:${hexA(col,0.1)};color:${col};font-weight:700;font-size:10px;padding:4px 10px;text-align:left">▸ ${group.label}</td></tr>`
+      const header = `<tr><td colspan="${span}" style="border:${B};${VA}background:${hexA(col,0.1)};color:${col};font-weight:700;font-size:10px;padding:5px 10px;text-align:left">▸ ${group.label}</td></tr>`
       const rows = emps.map(e => {
         const sch = schMap[e.id] || {}
         const rowBg = hexA(DEPT_COLORS[e.dept] || '#000000', 0.05)
-        const idCell = canEdit ? `<td style="border:${B};background:${rowBg};padding:3px 6px;text-align:left;color:#94a3b8;font-size:9px;font-family:monospace;white-space:nowrap">${e.id}</td>` : ''
-        const nameCell = `<td style="border:${B};background:${rowBg};padding:3px 6px;text-align:left;color:#334155;font-weight:700;font-size:10px;white-space:nowrap">${e.name}</td>`
-        const posCell = `<td style="border:${B};background:${rowBg};padding:3px 6px;text-align:left;color:#94a3b8;font-size:9px;white-space:nowrap">${e.position}</td>`
+        const idCell = canEdit ? `<td style="border:${B};${VA}background:${rowBg};padding:4px 6px;text-align:left;color:#94a3b8;font-size:9px;font-family:monospace;white-space:nowrap">${e.id}</td>` : ''
+        const nameCell = `<td style="border:${B};${VA}background:${rowBg};padding:4px 6px;text-align:left;color:#334155;font-weight:700;font-size:10px;white-space:nowrap">${e.name}</td>`
+        const posCell = `<td style="border:${B};${VA}background:${rowBg};padding:4px 6px;text-align:left;color:#94a3b8;font-size:9px;white-space:nowrap">${e.position}</td>`
         const dayCells = days.map(d => {
           const w = dow(d), st = sch[d] || '', cfg = STATUS_CFG[st] || STATUS_CFG['']
-          const chip = st ? `<span style="display:inline-block;background:${cfg.bg};color:${cfg.color};border-radius:4px;padding:2px 5px;font-weight:800;font-size:10px;min-width:24px">${st}</span>` : ''
-          return `<td style="border:${B};${wkBorder(w)}background:#ffffff;padding:3px;text-align:center">${chip}</td>`
+          const chip = st ? `<span style="display:inline-block;background:${cfg.bg};color:${cfg.color};border-radius:4px;padding:2px 5px;font-weight:800;font-size:10px;line-height:1.2;min-width:24px">${st}</span>` : ''
+          return `<td style="border:${B};${VA}${wkBorder(w)}background:#ffffff;padding:4px 3px;text-align:center">${chip}</td>`
         }).join('')
-        const sumCells = canEdit ? (() => {
-          const s = calcSummary(e.id)
-          return summaryKeys.map(k => {
-            const v = k==='D'?s.D:k==='S'?s.S:k==='H'?s.H:k==='OFF'?s.OFF:s.Y
-            return `<td style="border:${B};background:${STATUS_CFG[k].bg};color:${STATUS_CFG[k].color};font-weight:800;font-size:10px;text-align:center;padding:3px 4px">${v||''}</td>`
-          }).join('')
-        })() : ''
-        return `<tr>${idCell}${nameCell}${posCell}${dayCells}${sumCells}</tr>`
+        return `<tr>${idCell}${nameCell}${posCell}${dayCells}</tr>`
       }).join('')
       return header + rows
     }).join('')
 
-    // ── 푸터 (관리자: 부서별 근무 합계 + 총합) ──
-    const footer = canEdit ? (() => {
-      const deptRows = DEPTS.filter(d => grouped[d].length > 0).map(dept => {
-        const col = DEPT_COLORS[dept] || '#64748b', bg = hexA(col, 0.12)
-        const label = `<td colspan="3" style="border:${B};background:${bg};color:${col};font-weight:700;font-size:10px;text-align:right;padding:3px 6px;white-space:nowrap">${dept}</td>`
-        const cells = days.map(d => {
-          const w = dow(d), v = deptDayWork[dept][d] || 0
-          return `<td style="border:${B};${wkBorder(w)}background:${bg};color:${col};font-weight:600;font-size:10px;text-align:center;padding:3px">${fmt(v)}</td>`
-        }).join('')
-        return `<tr>${label}${cells}<td colspan="5" style="border:${B};background:${bg}"></td></tr>`
-      }).join('')
-      const tLabel = `<td colspan="3" style="border:${B};background:#dbeafe;color:#1e3a8a;font-weight:800;font-size:10px;text-align:right;padding:3px 6px;white-space:nowrap">합계 근무</td>`
-      const tCells = days.map(d => {
-        const w = dow(d), v = totalDayWork[d] || 0
-        return `<td style="border:${B};${wkBorder(w)}background:#dbeafe;color:#1e3a8a;font-weight:800;font-size:10px;text-align:center;padding:3px">${fmt(v)}</td>`
-      }).join('')
-      return `<tfoot>${deptRows}<tr>${tLabel}${tCells}<td colspan="5" style="border:${B};background:#dbeafe"></td></tr></tfoot>`
-    })() : ''
-
     const html = `<div style="font-family:'Malgun Gothic',sans-serif;padding:16px;background:#fff;display:inline-block">
       <div style="font-size:14px;font-weight:900;color:#1e293b;margin-bottom:10px">${year}년 ${month}월 근무표</div>
       <table style="border-collapse:collapse">
-        <thead><tr>${headFixed}${headDays}${headSummary}</tr></thead>
+        <thead><tr>${headFixed}${headDays}</tr></thead>
         <tbody>${bodyGroups}</tbody>
-        ${footer}
       </table>
     </div>`
 
