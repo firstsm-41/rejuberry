@@ -54,7 +54,7 @@ export default function Dashboard() {
   useEffect(() => {
     const load = async () => {
       const [empsRes, schedRes] = await Promise.all([
-        supabase.from('employees').select('*').eq('status', 'active'),
+        supabase.from('employees').select('*').eq('status', 'active').order('id'),
         supabase.from('schedules').select('employee_id,status')
           .eq('year', todayY).eq('month', todayM).eq('day', todayD),
       ])

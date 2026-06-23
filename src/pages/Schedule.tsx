@@ -5,7 +5,7 @@ import type { Employee, Schedule as SchRow } from '../types/database'
 import Modal from '../components/Modal'
 import * as XLSX from 'xlsx-js-style'
 import html2canvas from 'html2canvas'
-import { DEPTS, STATS_DEPTS, DEPT_COLORS, DAYS_KR, STATUS_ORDER, STATUS_CFG } from '../constants'
+import { DEPTS, STATS_DEPTS, DEPT_COLORS, DAYS_KR, STATUS_ORDER, STATUS_CFG, SCHEDULE_GROUPS } from '../constants'
 import type { WorkStatus } from '../constants'
 
 type SchMap = Record<string, Record<number, WorkStatus>>
@@ -368,49 +368,86 @@ export default function Schedule() {
   }
 
   const exportImage = async () => {
-    const BA = '1px solid #e2e8f0'
-    const cellStyle = (bg: string, color: string, bold: boolean, align: string) =>
-      `border:${BA};padding:3px 4px;text-align:${align};background:${bg};color:${color};font-weight:${bold?'bold':'normal'};font-size:10px;white-space:nowrap`
+    // 화면의 근무표를 그대로 재현 (Tailwind v4 호환 위해 전부 inline 스타일 + rgba)
+    const B = '1px solid #e2e8f0'
+    const hexA = (hex: string, a: number) => {
+      const h = (hex || '#000000').replace('#', '')
+      const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16)
+      return `rgba(${r},${g},${b},${a})`
+    }
+    const days = Array.from({length:dim},(_,i)=>i+1)
+    const wkBorder = (w:number) => w===6?'border-right:2px solid #bfdbfe;':w===0?'border-right:2px solid #fecaca;':''
+    const span = (canEdit?1:0) + 2 + dim + (canEdit?5:0)
 
-    const thDate = Array.from({length:dim},(_,i) => {
-      const d=i+1, w=dow(d)
-      const bg=w===6?'#dbeafe':w===0?'#fee2e2':'#f1f5f9'
-      const tc=w===6?'#1d4ed8':w===0?'#b91c1c':'#334155'
-      return `<th style="${cellStyle(bg,tc,true,'center')}">${d}<br><span style="font-size:8px">${DAYS_KR[w]}</span></th>`
+    // ── 헤더 ──
+    const thFix = `border:${B};background:#ffffff;color:#64748b;font-weight:700;font-size:10px;padding:4px 6px;text-align:left;white-space:nowrap`
+    const headFixed = (canEdit ? `<th style="${thFix}">사번</th>` : '') +
+      `<th style="${thFix}">이름</th><th style="${thFix}">직급</th>`
+    const headDays = days.map(d => {
+      const w = dow(d), tc = w===6?'#3b82f6':w===0?'#ef4444':'#475569'
+      return `<th style="border:${B};${wkBorder(w)}background:#f8fafc;padding:3px 2px;text-align:center;min-width:30px">`
+        + `<div style="font-weight:800;font-size:10px;color:${tc}">${d}</div>`
+        + `<div style="font-size:8px;color:${tc};opacity:.7">${DAYS_KR[w]}</div></th>`
     }).join('')
+    const summaryKeys: WorkStatus[] = ['D','S','H','OFF','Y']
+    const headSummary = canEdit ? summaryKeys.map(s =>
+      `<th style="border:${B};background:${STATUS_CFG[s].bg};color:${STATUS_CFG[s].color};font-weight:800;font-size:10px;padding:4px;text-align:center;min-width:28px">${STATUS_CFG[s].label}</th>`
+    ).join('') : ''
 
-    const deptRows = DEPTS.filter(d => grouped[d].length > 0).map(dept => {
-      const col=DEPT_COLORS[dept]||'#64748b'
-      const emps=grouped[dept]
-      return `
-        <tr><td colspan="${2+dim}" style="background:${col}18;color:${col};font-weight:700;font-size:10px;padding:3px 8px;border:${BA}">▸ ${dept}</td></tr>
-        ${emps.map(e => {
-          const sch=schMap[e.id]||{}
-          const cells=Array.from({length:dim},(_,i) => {
-            const d=i+1, st=sch[d]||''
-            const cfg=STATUS_CFG[st]||STATUS_CFG['']
-            const bg=st&&cfg.bg!=='transparent'?cfg.bg:'#ffffff'
-            const tc=st&&cfg.color!=='transparent'?cfg.color:'#94a3b8'
-            return `<td style="${cellStyle(bg,tc,!!st,'center')}">${st||''}</td>`
+    // ── 본문 (그룹별) ──
+    const bodyGroups = SCHEDULE_GROUPS.map(group => {
+      const emps = group.depts.flatMap(d => grouped[d] || [])
+      if (!emps.length) return ''
+      const col = group.color
+      const header = `<tr><td colspan="${span}" style="border:${B};background:${hexA(col,0.1)};color:${col};font-weight:700;font-size:10px;padding:4px 10px;text-align:left">▸ ${group.label}</td></tr>`
+      const rows = emps.map(e => {
+        const sch = schMap[e.id] || {}
+        const rowBg = hexA(DEPT_COLORS[e.dept] || '#000000', 0.05)
+        const idCell = canEdit ? `<td style="border:${B};background:${rowBg};padding:3px 6px;text-align:left;color:#94a3b8;font-size:9px;font-family:monospace;white-space:nowrap">${e.id}</td>` : ''
+        const nameCell = `<td style="border:${B};background:${rowBg};padding:3px 6px;text-align:left;color:#334155;font-weight:700;font-size:10px;white-space:nowrap">${e.name}</td>`
+        const posCell = `<td style="border:${B};background:${rowBg};padding:3px 6px;text-align:left;color:#94a3b8;font-size:9px;white-space:nowrap">${e.position}</td>`
+        const dayCells = days.map(d => {
+          const w = dow(d), st = sch[d] || '', cfg = STATUS_CFG[st] || STATUS_CFG['']
+          const chip = st ? `<span style="display:inline-block;background:${cfg.bg};color:${cfg.color};border-radius:4px;padding:2px 5px;font-weight:800;font-size:10px;min-width:24px">${st}</span>` : ''
+          return `<td style="border:${B};${wkBorder(w)}background:#ffffff;padding:3px;text-align:center">${chip}</td>`
+        }).join('')
+        const sumCells = canEdit ? (() => {
+          const s = calcSummary(e.id)
+          return summaryKeys.map(k => {
+            const v = k==='D'?s.D:k==='S'?s.S:k==='H'?s.H:k==='OFF'?s.OFF:s.Y
+            return `<td style="border:${B};background:${STATUS_CFG[k].bg};color:${STATUS_CFG[k].color};font-weight:800;font-size:10px;text-align:center;padding:3px 4px">${v||''}</td>`
           }).join('')
-          return `<tr>
-            <td style="${cellStyle(col+'10','#334155',true,'left')}">${e.name}</td>
-            <td style="${cellStyle('#f8fafc','#64748b',false,'left')}">${e.position}</td>
-            ${cells}
-          </tr>`
-        }).join('')}
-      `
+        })() : ''
+        return `<tr>${idCell}${nameCell}${posCell}${dayCells}${sumCells}</tr>`
+      }).join('')
+      return header + rows
     }).join('')
+
+    // ── 푸터 (관리자: 부서별 근무 합계 + 총합) ──
+    const footer = canEdit ? (() => {
+      const deptRows = DEPTS.filter(d => grouped[d].length > 0).map(dept => {
+        const col = DEPT_COLORS[dept] || '#64748b', bg = hexA(col, 0.12)
+        const label = `<td colspan="3" style="border:${B};background:${bg};color:${col};font-weight:700;font-size:10px;text-align:right;padding:3px 6px;white-space:nowrap">${dept}</td>`
+        const cells = days.map(d => {
+          const w = dow(d), v = deptDayWork[dept][d] || 0
+          return `<td style="border:${B};${wkBorder(w)}background:${bg};color:${col};font-weight:600;font-size:10px;text-align:center;padding:3px">${fmt(v)}</td>`
+        }).join('')
+        return `<tr>${label}${cells}<td colspan="5" style="border:${B};background:${bg}"></td></tr>`
+      }).join('')
+      const tLabel = `<td colspan="3" style="border:${B};background:#dbeafe;color:#1e3a8a;font-weight:800;font-size:10px;text-align:right;padding:3px 6px;white-space:nowrap">합계 근무</td>`
+      const tCells = days.map(d => {
+        const w = dow(d), v = totalDayWork[d] || 0
+        return `<td style="border:${B};${wkBorder(w)}background:#dbeafe;color:#1e3a8a;font-weight:800;font-size:10px;text-align:center;padding:3px">${fmt(v)}</td>`
+      }).join('')
+      return `<tfoot>${deptRows}<tr>${tLabel}${tCells}<td colspan="5" style="border:${B};background:#dbeafe"></td></tr></tfoot>`
+    })() : ''
 
     const html = `<div style="font-family:'Malgun Gothic',sans-serif;padding:16px;background:#fff;display:inline-block">
       <div style="font-size:14px;font-weight:900;color:#1e293b;margin-bottom:10px">${year}년 ${month}월 근무표</div>
       <table style="border-collapse:collapse">
-        <thead><tr>
-          <th style="${cellStyle('#334155','#f8fafc',true,'left')}">이름</th>
-          <th style="${cellStyle('#334155','#f8fafc',true,'left')}">직급</th>
-          ${thDate}
-        </tr></thead>
-        <tbody>${deptRows}</tbody>
+        <thead><tr>${headFixed}${headDays}${headSummary}</tr></thead>
+        <tbody>${bodyGroups}</tbody>
+        ${footer}
       </table>
     </div>`
 
@@ -719,14 +756,14 @@ export default function Schedule() {
                 </tr>
               </thead>
               <tbody>
-                {DEPTS.map(dept => {
-                  const emps = grouped[dept]; if (!emps.length) return null
-                  const col  = DEPT_COLORS[dept]||'#64748b'
+                {SCHEDULE_GROUPS.map(group => {
+                  const emps = group.depts.flatMap(d => grouped[d] || []); if (!emps.length) return null
+                  const col  = group.color
                   const span = (canEdit?1:0)+2+dim+(canEdit?5:0)
                   return [
-                    <tr key={`dept-${dept}`}>
+                    <tr key={`grp-${group.label}`}>
                       <td colSpan={span} style={{background:col+'10',padding:'4px 12px',fontSize:11,fontWeight:700,color:col,borderBottom:'1px solid #e2e8f0'}}>
-                        ▸ {dept}
+                        ▸ {group.label}
                       </td>
                     </tr>,
                     ...emps.map(e => {

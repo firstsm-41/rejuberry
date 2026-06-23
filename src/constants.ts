@@ -31,13 +31,25 @@ export const STATUS_CFG: Record<string, { label:string; bg:string; color:string 
 }
 
 export const TEAM_GROUPS: Array<{ label: string; depts: string[]; color: string }> = [
-  { label: '진료진',      depts: ['대표원장', '부원장'], color: '#1d4ed8' },
+  { label: '의료진',      depts: ['대표원장', '부원장'], color: '#1d4ed8' },
   { label: '실장',        depts: ['총괄실장', '실장'],   color: '#7c3aed' },
   { label: '코디',        depts: ['코디'],               color: '#0369a1' },
   { label: '간호',        depts: ['간호'],               color: '#047857' },
   { label: '피부1(시술)', depts: ['피부1(시술)'],        color: '#9d174d' },
   { label: '피부2(관리)', depts: ['피부2(관리)'],        color: '#92400e' },
   { label: '마케팅',      depts: ['마케팅'],             color: '#0f766e' },
+]
+
+// 근무표 표시용 그룹 (의료진·실장 묶음 + 미분류까지 전체 포함)
+export const SCHEDULE_GROUPS: Array<{ label: string; depts: string[]; color: string }> = [
+  { label: '의료진',      depts: ['대표원장', '부원장'], color: '#1e40af' },
+  { label: '실장',        depts: ['총괄실장', '실장'],   color: '#6d28d9' },
+  { label: '코디',        depts: ['코디'],               color: '#0369a1' },
+  { label: '간호',        depts: ['간호'],               color: '#047857' },
+  { label: '피부1(시술)', depts: ['피부1(시술)'],        color: '#9d174d' },
+  { label: '피부2(관리)', depts: ['피부2(관리)'],        color: '#92400e' },
+  { label: '마케팅',      depts: ['마케팅'],             color: '#0f766e' },
+  { label: '미분류',      depts: ['미분류'],             color: '#6b7280' },
 ]
 
 export const DEFAULT_OFF_QUOTAS: Record<string, number> = {
