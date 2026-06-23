@@ -1,30 +1,36 @@
-// 앱 로고 — 한 곳에서 관리.
-// 로고 이미지 파일을 받으면:
-//   1) 파일을 src/assets/logo.png (또는 .svg) 로 저장
-//   2) 아래 USE_IMAGE 를 true 로 바꾸고 import 주석을 해제
-// 그러면 로그인·사이드바·모바일 상단바 로고가 한 번에 교체됩니다.
+import { useState } from 'react'
 
-// import logoUrl from '../assets/logo.png'
-const logoUrl = ''
-const USE_IMAGE = false
+// 앱 로고 — 한 곳에서 관리.
+// 사용법: 로고 파일을 public/logo.png 로 저장하면 자동으로 표시됩니다.
+//   (다른 파일명/형식을 쓰려면 LOGO_URL 만 바꾸세요. 예: '/logo.svg')
+// 파일이 없으면 핑크 그라데이션 'RB' 박스로 폴백합니다.
+const LOGO_URL = '/logo.png'
 
 export default function BrandLogo({
   size = 36,
   rounded = 'rounded-xl',
 }: { size?: number; rounded?: string }) {
-  if (USE_IMAGE && logoUrl) {
+  const [failed, setFailed] = useState(false)
+
+  if (!failed) {
     return (
-      <img src={logoUrl} alt="리쥬베리 워크스페이스"
-        className={`object-cover ${rounded}`}
-        style={{ width: size, height: size }} />
+      <div className={`bg-white flex items-center justify-center overflow-hidden flex-shrink-0 ${rounded}`}
+        style={{ width: size, height: size }}>
+        <img src={LOGO_URL} alt="리쥬베리 워크스페이스"
+          onError={() => setFailed(true)}
+          className="object-contain"
+          style={{ width: size * 0.92, height: size * 0.92 }} />
+      </div>
     )
   }
+
+  // 폴백: 파일이 아직 없을 때
   return (
     <div
-      className={`bg-gradient-to-br from-blue-400 to-blue-700 flex items-center justify-center text-white font-bold shadow-lg ${rounded}`}
-      style={{ width: size, height: size, fontSize: Math.round(size * 0.42) }}
+      className={`bg-gradient-to-br from-pink-300 to-pink-500 flex items-center justify-center text-white font-bold shadow-lg flex-shrink-0 ${rounded}`}
+      style={{ width: size, height: size, fontSize: Math.round(size * 0.36) }}
     >
-      리
+      RB
     </div>
   )
 }
