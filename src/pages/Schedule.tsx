@@ -22,6 +22,10 @@ interface SwapLog {
   emp1_old_status: string | null; emp2_old_status: string | null
   requested_by: string | null; swapped_at: string
 }
+interface EditLog {
+  id: number; employee_id: string; year: number; month: number; day: number
+  old_status: string | null; new_status: string | null; edited_at: string
+}
 
 export default function Schedule() {
   const { profile } = useAuth()
@@ -53,6 +57,7 @@ export default function Schedule() {
   const [logModal, setLogModal]     = useState(false)
   const pickerRef        = useRef<HTMLDivElement>(null)
   const tableContainerRef = useRef<HTMLDivElement>(null)
+  const schMapRef        = useRef<SchMap>({})
 
   const myEmpId = profile?.employee_id ?? ''
 
@@ -97,6 +102,7 @@ export default function Schedule() {
   }, [year, month])
 
   useEffect(() => { load() }, [load])
+  useEffect(() => { schMapRef.current = schMap }, [schMap])
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
@@ -107,6 +113,7 @@ export default function Schedule() {
   }, [])
 
   const applyStatus = useCallback(async (empId: string, day: number, status: WorkStatus) => {
+    const oldStatus = schMapRef.current[empId]?.[day] || ''
     setSchMap(prev => {
       const next = { ...prev, [empId]: { ...(prev[empId] || {}) } }
       if (status === '') delete next[empId][day]
@@ -122,7 +129,14 @@ export default function Schedule() {
         { onConflict: 'employee_id,year,month,day' }
       )
     }
-  }, [year, month])
+    // 관리자 직접 수정 이력 (확정된 근무표에 한해 기록)
+    if (canEdit && confirmed && oldStatus !== status) {
+      void supabase.from('schedule_edit_logs').insert([{
+        employee_id: empId, year, month, day,
+        old_status: oldStatus || null, new_status: status || null,
+      }])
+    }
+  }, [year, month, canEdit, confirmed])
 
   const setStatus = async (status: WorkStatus) => {
     if (!picker) return
@@ -560,7 +574,7 @@ export default function Schedule() {
             <div className="flex items-center gap-1.5 ml-auto flex-wrap">
               <button onClick={() => setLogModal(true)} className="flex items-center gap-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 px-2.5 py-1.5 rounded-lg text-xs font-semibold">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
-                교환 기록
+                변경 기록
               </button>
               <button onClick={exportExcel} className="flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-2.5 py-1.5 rounded-lg text-xs font-semibold">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
@@ -952,8 +966,10 @@ export default function Schedule() {
 // ── Swap Log Modal (교환/변경 기록) ──────────────────────────────────────────────
 function SwapLogModal({ year, month, employees, onClose }:
   { year:number; month:number; employees:Employee[]; onClose:()=>void }) {
+  const [tab, setTab]         = useState<'swap'|'edit'>('swap')
   const [logs, setLogs]       = useState<SwapLog[]>([])
   const [reqs, setReqs]       = useState<SwapReq[]>([])
+  const [edits, setEdits]     = useState<EditLog[]>([])
   const [loading, setLoading] = useState(true)
   const name = (id:string) => employees.find(e => e.id === id)?.name || id
 
@@ -961,8 +977,9 @@ function SwapLogModal({ year, month, employees, onClose }:
     Promise.all([
       supabase.from('schedule_swap_logs').select('*').eq('year', year).eq('month', month).order('swapped_at', { ascending: false }),
       supabase.from('schedule_swap_requests').select('*').eq('year', year).eq('month', month).neq('status', 'pending').order('created_at', { ascending: false }),
-    ]).then(([lg, rq]: [{data:SwapLog[]|null}, {data:SwapReq[]|null}]) => {
-      setLogs(lg.data || []); setReqs(rq.data || []); setLoading(false)
+      supabase.from('schedule_edit_logs').select('*').eq('year', year).eq('month', month).order('edited_at', { ascending: false }),
+    ]).then(([lg, rq, ed]: [{data:SwapLog[]|null}, {data:SwapReq[]|null}, {data:EditLog[]|null}]) => {
+      setLogs(lg.data || []); setReqs(rq.data || []); setEdits(ed.data || []); setLoading(false)
     })
   }, [year, month])
 
@@ -973,47 +990,71 @@ function SwapLogModal({ year, month, employees, onClose }:
   const fmtTime = (s:string) => new Date(s).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false})
 
   return (
-    <Modal open={true} onClose={onClose} title={`${year}년 ${month}월 근무 교환 기록`} size="md">
+    <Modal open={true} onClose={onClose} title={`${year}년 ${month}월 근무표 변경 기록`} size="md">
       {loading ? (
         <p className="text-sm text-slate-400 text-center py-8">불러오는 중...</p>
       ) : (
-        <div className="space-y-5">
-          <div>
-            <div className="text-xs font-bold text-slate-500 mb-2">완료된 교환 <span className="text-slate-400 font-normal">{logs.length}건</span></div>
-            {logs.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-6 bg-slate-50 rounded-xl">완료된 교환이 없습니다</p>
-            ) : (
-              <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl max-h-72 overflow-y-auto">
-                {logs.map(l => (
-                  <div key={l.id} className="flex items-center gap-2 px-3 py-2.5 text-sm flex-wrap">
-                    <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full flex-shrink-0">{l.month}/{l.day}</span>
-                    <span className="font-semibold text-slate-700">{name(l.emp1_id)}</span>
-                    {chip(l.emp1_old_status)}
-                    <span className="text-slate-400">⇌</span>
-                    <span className="font-semibold text-slate-700">{name(l.emp2_id)}</span>
-                    {chip(l.emp2_old_status)}
-                    <span className="ml-auto text-xs text-slate-400">{fmtTime(l.swapped_at)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+        <div className="space-y-4">
+          <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+            <button onClick={() => setTab('swap')} className={`flex-1 py-1.5 rounded-lg text-sm font-semibold ${tab==='swap'?'bg-white shadow text-slate-800':'text-slate-500'}`}>교환 기록 ({logs.length})</button>
+            <button onClick={() => setTab('edit')} className={`flex-1 py-1.5 rounded-lg text-sm font-semibold ${tab==='edit'?'bg-white shadow text-slate-800':'text-slate-500'}`}>관리자 수정 ({edits.length})</button>
           </div>
 
-          {reqs.length > 0 && (
-            <div>
-              <div className="text-xs font-bold text-slate-500 mb-2">요청 처리 내역</div>
-              <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl max-h-52 overflow-y-auto">
-                {reqs.map(r => (
-                  <div key={r.id} className="flex items-center gap-2 px-3 py-2 text-sm flex-wrap">
-                    <span className="text-xs text-slate-500 flex-shrink-0">{r.month}/{r.day}</span>
-                    <span className="text-slate-600">{name(r.requester_emp)} → {name(r.target_emp)}</span>
-                    <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded-full ${r.status==='approved'?'bg-green-100 text-green-700':r.status==='rejected'?'bg-red-100 text-red-700':'bg-slate-100 text-slate-500'}`}>
-                      {r.status==='approved'?'수락됨':r.status==='rejected'?'거절됨':'취소됨'}
-                    </span>
+          {tab === 'swap' && (
+            <div className="space-y-4">
+              {logs.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-6 bg-slate-50 rounded-xl">완료된 교환이 없습니다</p>
+              ) : (
+                <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl max-h-72 overflow-y-auto">
+                  {logs.map(l => (
+                    <div key={l.id} className="flex items-center gap-2 px-3 py-2.5 text-sm flex-wrap">
+                      <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full flex-shrink-0">{l.month}/{l.day}</span>
+                      <span className="font-semibold text-slate-700">{name(l.emp1_id)}</span>
+                      {chip(l.emp1_old_status)}
+                      <span className="text-slate-400">⇌</span>
+                      <span className="font-semibold text-slate-700">{name(l.emp2_id)}</span>
+                      {chip(l.emp2_old_status)}
+                      <span className="ml-auto text-xs text-slate-400">{fmtTime(l.swapped_at)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {reqs.length > 0 && (
+                <div>
+                  <div className="text-xs font-bold text-slate-500 mb-2">요청 처리 내역</div>
+                  <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl max-h-52 overflow-y-auto">
+                    {reqs.map(r => (
+                      <div key={r.id} className="flex items-center gap-2 px-3 py-2 text-sm flex-wrap">
+                        <span className="text-xs text-slate-500 flex-shrink-0">{r.month}/{r.day}</span>
+                        <span className="text-slate-600">{name(r.requester_emp)} → {name(r.target_emp)}</span>
+                        <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded-full ${r.status==='approved'?'bg-green-100 text-green-700':r.status==='rejected'?'bg-red-100 text-red-700':'bg-slate-100 text-slate-500'}`}>
+                          {r.status==='approved'?'수락됨':r.status==='rejected'?'거절됨':'취소됨'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab === 'edit' && (
+            edits.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-6 bg-slate-50 rounded-xl">관리자 직접 수정 내역이 없습니다<br /><span className="text-xs">(확정된 근무표를 수정하면 기록됩니다)</span></p>
+            ) : (
+              <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl max-h-80 overflow-y-auto">
+                {edits.map(e => (
+                  <div key={e.id} className="flex items-center gap-2 px-3 py-2.5 text-sm flex-wrap">
+                    <span className="text-xs font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full flex-shrink-0">{e.month}/{e.day}</span>
+                    <span className="font-semibold text-slate-700">{name(e.employee_id)}</span>
+                    {chip(e.old_status)}
+                    <span className="text-slate-400">→</span>
+                    {chip(e.new_status)}
+                    <span className="ml-auto text-xs text-slate-400">{fmtTime(e.edited_at)}</span>
                   </div>
                 ))}
               </div>
-            </div>
+            )
           )}
         </div>
       )}
