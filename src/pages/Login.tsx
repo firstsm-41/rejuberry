@@ -51,14 +51,37 @@ export default function Login() {
     setLoginLoading(false)
   }
 
+  // 생년월일 자유 입력(6자리 YYMMDD / 8자리 YYYYMMDD / YYYY-MM-DD)을 YYYY-MM-DD 로 변환
+  const toISODate = (raw: string): string | null => {
+    const s = raw.trim()
+    const digits = s.replace(/\D/g, '')
+    let y: number, m: number, d: number
+    if (digits.length === 8) {
+      y = +digits.slice(0, 4); m = +digits.slice(4, 6); d = +digits.slice(6, 8)
+    } else if (digits.length === 6) {
+      const yy = +digits.slice(0, 2); m = +digits.slice(2, 4); d = +digits.slice(4, 6)
+      const pivot = new Date().getFullYear() % 100   // 2자리 연도 기준점 (예: 26)
+      y = yy <= pivot ? 2000 + yy : 1900 + yy
+    } else {
+      return null
+    }
+    if (m < 1 || m > 12 || d < 1 || d > 31) return null
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${y}-${pad(m)}-${pad(d)}`
+  }
+
   // ── Step 1: 이름 + 생년월일 인증 ──────────────
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault()
     setRegError('')
-    setRegLoading(true)
 
-    // birth date 형식 변환: YYYY-MM-DD
-    const birth = verBirth  // input type="date" 가 이미 YYYY-MM-DD 반환
+    const birth = toISODate(verBirth)
+    if (!birth) {
+      setRegError('생년월일을 6자리(예: 910928)로 입력하세요.')
+      return
+    }
+
+    setRegLoading(true)
 
     const { data, error } = await supabase.rpc('verify_employee', {
       p_name: verName.trim(),
@@ -215,8 +238,10 @@ export default function Login() {
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 mb-1.5">생년월일</label>
-                      <input type="date" value={verBirth} onChange={e => setVerBirth(e.target.value)} required
+                      <input value={verBirth} onChange={e => setVerBirth(e.target.value)} required
+                        inputMode="numeric" maxLength={10} placeholder="6자리 입력 (예: 910928)"
                         className="w-full border-1.5 border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-blue-500" />
+                      <p className="text-xs text-slate-400 mt-1">생년월일 6자리 (YYMMDD). 예) 1991년 9월 28일 → 910928</p>
                     </div>
                     {regError && (
                       <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-sm text-red-600">{regError}</div>
