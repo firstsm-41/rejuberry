@@ -55,8 +55,10 @@ function StaffView() {
   )
 
   const total   = leaveData?.total_days ?? 15
-  const usedY   = schedEntries.filter(s => s.status === 'Y').length
-  const usedH   = schedEntries.filter(s => s.status === 'H').length
+  // 확정된 달의 근무표 Y/H만 집계
+  const countedSched = schedEntries.filter(s => confirmedMonths.has(s.month))
+  const usedY   = countedSched.filter(s => s.status === 'Y').length
+  const usedH   = countedSched.filter(s => s.status === 'H').length
   const used    = usedY + usedH * 0.5
   const remain  = total - used
 
@@ -93,6 +95,10 @@ function StaffView() {
               <div className={`text-2xl font-bold ${s.color}`}>{s.val}<span className="text-sm font-normal text-slate-400 ml-0.5">{s.unit}</span></div>
             </div>
           ))}
+        </div>
+
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-xs text-amber-700">
+          ※ 사용/잔여는 <strong>확정된 근무표</strong>의 연차·반차만 집계됩니다. 신청만 하고 아직 확정 전인 달은 잔여에 반영되지 않습니다.
         </div>
 
         {/* 연차 사용 내역 */}
@@ -167,13 +173,15 @@ function ManagerView() {
   const [editingTotal, setEditingTotal] = useState<string | null>(null)
   const [editTotalVal, setEditTotalVal] = useState('')
   const [detailEmpId, setDetailEmpId] = useState<string | null>(null)
+  const [confirmedMonths, setConfirmedMonths] = useState<Set<number>>(new Set())
 
   const load = useCallback(async () => {
-    const [empsRes, ldRes, leRes, schRes] = await Promise.all([
+    const [empsRes, ldRes, leRes, schRes, confRes] = await Promise.all([
       supabase.from('employees').select('*').eq('status', 'active').order('id'),
       supabase.from('leave_data').select('*').eq('year', year),
       supabase.from('leave_entries').select('*').eq('year', year).order('start_date', { ascending: false }),
       supabase.from('schedules').select('employee_id,month,day,status').eq('year', year).in('status', ['Y','H']),
+      supabase.from('schedule_confirmed').select('month,confirmed_at').eq('year', year),
     ])
     setEmployees(empsRes.data || [])
     const ldMap: Record<string, LeaveData> = {}
@@ -186,6 +194,9 @@ function ManagerView() {
       schMap[r.employee_id].push({ month: r.month, day: r.day, status: r.status })
     })
     setScheduleY(schMap)
+    const conf = new Set<number>()
+    ;(confRes.data || []).forEach((r: {month:number; confirmed_at:string|null}) => { if (r.confirmed_at) conf.add(r.month) })
+    setConfirmedMonths(conf)
     setLoading(false)
   }, [year])
 
@@ -194,7 +205,8 @@ function ManagerView() {
   const getLeaveInfo = (empId: string) => {
     const ld = leaveData[empId]
     const total = ld?.total_days ?? 15
-    const yDates = scheduleY[empId] || []
+    const all = scheduleY[empId] || []
+    const yDates = all.filter(d => confirmedMonths.has(d.month))  // 확정된 달만 집계
     const usedY = yDates.filter(d => d.status === 'Y').length
     const usedH = yDates.filter(d => d.status === 'H').length
     const used  = usedY + usedH * 0.5
@@ -256,6 +268,9 @@ function ManagerView() {
                 className="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none w-28">
                 {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}년</option>)}
               </select>
+              <span className="ml-auto text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                ※ 확정된 근무표 기준 집계
+              </span>
             </div>
 
             {selEmp && selInfo ? (

@@ -265,7 +265,8 @@ export default function Schedule() {
     for (let d = 1; d <= dim; d++) {
       const viols: {dept:string; names:string[]}[] = []
       for (const [dept, max] of Object.entries(offQuotas)) {
-        const offEmps = employees.filter(e => e.dept === dept && (schMap[e.id]?.[d] || '') === 'Y')
+        // 총괄실장은 실장 파트로 묶어서 겹침 판정 (swapGroupOf 기준)
+        const offEmps = employees.filter(e => swapGroupOf(e.dept) === swapGroupOf(dept) && (schMap[e.id]?.[d] || '') === 'Y')
         if (offEmps.length > max) viols.push({ dept, names: offEmps.map(e => e.name) })
       }
       if (viols.length) res[d] = viols
