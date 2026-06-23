@@ -5,7 +5,7 @@
 
 -- ── 기존 테이블 정리 (재실행 시 충돌 방지) ──────────────────
 drop table if exists leave_entries cascade;
-drop table if exists leave_requests cascade;
+drop table if exists leave_requests cascade;   -- 레거시(미사용) — 존재 시 정리
 drop table if exists leave_data cascade;
 drop table if exists schedules cascade;
 drop table if exists hr_changes cascade;
@@ -36,7 +36,8 @@ create table employees (
   note         text,
   start_date   date not null,
   end_date     date,
-  status       text not null default 'active' check (status in ('active','retired')),
+  status        text not null default 'active' check (status in ('active','retired')),
+  manager_level int  not null default 2 check (manager_level in (0,1,2)),  -- 가입 시 부여 레벨
   created_at   timestamptz default now()
 );
 
@@ -85,24 +86,6 @@ create table leave_entries (
   created_at  timestamptz default now()
 );
 
--- ── leave_requests (연차 신청) ─────────────────────────────────
-create table leave_requests (
-  id              bigint generated always as identity primary key,
-  employee_id     text not null references employees(id) on delete cascade,
-  requester_id    uuid references auth.users(id),
-  start_date      date not null,
-  end_date        date not null,
-  days            numeric(4,1) not null,
-  type            text not null default 'Y' check (type in ('Y','H')),
-  reason          text,
-  status          text not null default 'pending' check (status in ('pending','approved','rejected')),
-  rejected_reason text,
-  approved_by     uuid references auth.users(id),
-  note            text,
-  created_at      timestamptz default now(),
-  updated_at      timestamptz default now()
-);
-
 -- ── Updated_at 자동 갱신 트리거 ────────────────────────────────
 create or replace function update_updated_at()
 returns trigger language plpgsql as $$
@@ -111,10 +94,6 @@ $$;
 
 create trigger trg_schedules_updated
   before update on schedules
-  for each row execute function update_updated_at();
-
-create trigger trg_leave_requests_updated
-  before update on leave_requests
   for each row execute function update_updated_at();
 
 -- ══════════════════════════════════════════════════════════════
@@ -126,7 +105,6 @@ alter table hr_changes    enable row level security;
 alter table schedules     enable row level security;
 alter table leave_data    enable row level security;
 alter table leave_entries enable row level security;
-alter table leave_requests enable row level security;
 
 -- ── 헬퍼: 현재 로그인 사용자의 레벨 ──────────────────────────
 create or replace function my_level()
@@ -222,23 +200,6 @@ create policy "운영자+ 삽입"
 create policy "운영자+ 삭제"
   on leave_entries for delete using (my_level() <= 1);
 
--- ──────────────────────────────────────────────────────────────
--- leave_requests
--- ──────────────────────────────────────────────────────────────
-create policy "전체 조회 (운영자) 또는 본인 신청"
-  on leave_requests for select
-  using (my_level() <= 1 or employee_id = my_employee_id());
-
-create policy "직원 본인이 신청 가능"
-  on leave_requests for insert
-  with check (employee_id = my_employee_id() or my_level() <= 1);
-
-create policy "운영자+ 승인/거절"
-  on leave_requests for update using (my_level() <= 1);
-
-create policy "운영자+ 삭제"
-  on leave_requests for delete using (my_level() <= 1);
-
 
 -- ══════════════════════════════════════════════════════════════
 -- 초기 데이터: 실제 직원 28명
@@ -285,6 +246,9 @@ on conflict (id) do update set
   prev_company = excluded.prev_company,
   start_date   = excluded.start_date,
   status       = excluded.status;
+
+-- 운영자 레벨 부여 (최수민 0001, 유다인 0023)
+update employees set manager_level = 1 where id in ('0001', '0023');
 
 -- 2026년 연차 기본 데이터
 insert into leave_data (employee_id, year, total_days)

@@ -13,6 +13,7 @@ import Changes from './pages/Changes'
 import Admin from './pages/Admin'
 import Overtime from './pages/Overtime'
 import Personnel from './pages/Personnel'
+import Guide from './pages/Guide'
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -81,6 +82,7 @@ export default function App() {
           <Route path="overtime" element={<Overtime />} />
           <Route path="personnel" element={<Personnel />} />
           <Route path="changes" element={<Changes />} />
+          <Route path="guide" element={<Guide />} />
           <Route path="admin" element={<Admin />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

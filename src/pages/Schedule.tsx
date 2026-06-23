@@ -5,26 +5,9 @@ import type { Employee, Schedule as SchRow } from '../types/database'
 import Modal from '../components/Modal'
 import * as XLSX from 'xlsx-js-style'
 import html2canvas from 'html2canvas'
+import { DEPTS, STATS_DEPTS, DEPT_COLORS, DAYS_KR, STATUS_ORDER, STATUS_CFG } from '../constants'
+import type { WorkStatus } from '../constants'
 
-const DEPTS = ['대표원장','부원장','총괄실장','실장','코디','간호','피부1(시술)','피부2(관리)','마케팅','미분류']
-const STATS_DEPTS = DEPTS.filter(d => d !== '마케팅' && d !== '미분류')
-const DEPT_COLORS: Record<string, string> = {
-  '대표원장':'#1e40af','부원장':'#1d4ed8','총괄실장':'#6d28d9',
-  '실장':'#7c3aed','코디':'#0369a1','간호':'#047857',
-  '피부1(시술)':'#9d174d','피부2(관리)':'#92400e',
-  '마케팅':'#0f766e','미분류':'#6b7280',
-}
-const DAYS_KR = ['일','월','화','수','목','금','토']
-type WorkStatus = 'D' | 'S' | 'H' | 'Y' | 'OFF' | ''
-const STATUS_ORDER: WorkStatus[] = ['D','S','H','Y','OFF','']
-const STATUS_CFG: Record<string, { label:string; bg:string; color:string }> = {
-  D:   { label:'근무',  bg:'#bfdbfe', color:'#0f172a' },
-  S:   { label:'추가',  bg:'#ddd6fe', color:'#0f172a' },
-  H:   { label:'반차',  bg:'#bbf7d0', color:'#0f172a' },
-  Y:   { label:'연차',  bg:'#fed7aa', color:'#0f172a' },
-  OFF: { label:'휴무',  bg:'#fecaca', color:'#0f172a' },
-  '':  { label:'공백',  bg:'transparent', color:'transparent' },
-}
 type SchMap = Record<string, Record<number, WorkStatus>>
 
 export default function Schedule() {
@@ -396,23 +379,6 @@ export default function Schedule() {
       return `<th style="${cellStyle(bg,tc,true,'center')}">${d}<br><span style="font-size:8px">${DAYS_KR[w]}</span></th>`
     }).join('')
 
-    const rows = employees.map(e => {
-      const sch=schMap[e.id]||{}
-      const cells = Array.from({length:dim},(_,i) => {
-        const d=i+1, st=sch[d]||''
-        const cfg=STATUS_CFG[st]||STATUS_CFG['']
-        const bg=st&&cfg.bg!=='transparent'?cfg.bg:'#ffffff'
-        const tc=st&&cfg.color!=='transparent'?cfg.color:'#94a3b8'
-        return `<td style="${cellStyle(bg,tc,!!st,'center')}">${st||''}</td>`
-      }).join('')
-      const col=DEPT_COLORS[e.dept]||'#64748b'
-      return `<tr>
-        <td style="${cellStyle(col+'18','#334155',true,'left')}">${e.name}</td>
-        <td style="${cellStyle('#f8fafc','#64748b',false,'left')}">${e.position}</td>
-        ${cells}
-      </tr>`
-    }).join('')
-
     const deptRows = DEPTS.filter(d => grouped[d].length > 0).map(dept => {
       const col=DEPT_COLORS[dept]||'#64748b'
       const emps=grouped[dept]
@@ -435,8 +401,6 @@ export default function Schedule() {
         }).join('')}
       `
     }).join('')
-
-    void rows
 
     const html = `<div style="font-family:'Malgun Gothic',sans-serif;padding:16px;background:#fff;display:inline-block">
       <div style="font-size:14px;font-weight:900;color:#1e293b;margin-bottom:10px">${year}년 ${month}월 근무표</div>

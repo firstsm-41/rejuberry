@@ -4,15 +4,7 @@ import { useAuth } from '../store/useAuth'
 import type { Employee } from '../types/database'
 import Modal from '../components/Modal'
 import { Navigate } from 'react-router-dom'
-
-const DEPTS = ['대표원장','부원장','총괄실장','실장','코디','간호','피부1(시술)','피부2(관리)','마케팅','미분류']
-const POSITIONS = ['대표원장','부원장','총괄실장','상담실장','VIP실장','코디네이터','간호팀장','간호조무사','간호사','피부1팀 팀장','피부2팀 팀장','피부관리사','마케팅팀 이사','마케팅팀 실장','마케팅팀 디자이너','청소','기타']
-const DEPT_COLORS: Record<string, string> = {
-  '대표원장':'#1e40af','부원장':'#1d4ed8','총괄실장':'#6d28d9',
-  '실장':'#7c3aed','코디':'#0369a1','간호':'#047857',
-  '피부1(시술)':'#9d174d','피부2(관리)':'#92400e',
-  '마케팅':'#0f766e','미분류':'#6b7280',
-}
+import { DEPTS, POSITIONS, DEPT_COLORS } from '../constants'
 
 const EMPTY_EMP: Partial<Employee> = {
   id:'', name:'', ssn:'', birth_date:'', phone:'', email:'',
@@ -95,7 +87,7 @@ export default function Personnel() {
 
   return (
     <div className="flex flex-col h-full overflow-auto">
-      <div className="p-6 space-y-4">
+      <div className="p-4 sm:p-6 space-y-4">
         {/* 필터 바 */}
         <div className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center gap-3 flex-wrap">
           <input
@@ -264,7 +256,7 @@ export default function Personnel() {
       {/* 신규 등록 모달 */}
       <Modal open={addModal} onClose={()=>{setAddModal(false);setAddError('')}} title="신규 직원 등록">
         <form onSubmit={handleAdd} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="사번 *">
               <input value={addEmp.id||''} onChange={e=>setAF('id',e.target.value)} required
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />

@@ -25,6 +25,14 @@ body {
 }
 .sch-cell:hover { filter: brightness(0.88); border-color: #94a3b8 !important; }
 
+/* 이미지 캡처 모드 - 오버플로우 제거 */
+body.capturing #root,
+body.capturing main,
+body.capturing .h-screen,
+body.capturing .h-full { height: auto !important; overflow: visible !important; }
+body.capturing .overflow-hidden { overflow: visible !important; }
+body.capturing .overflow-auto { overflow: visible !important; max-height: none !important; height: auto !important; }
+
 @media print {
   @page { size: A4 landscape; margin: 5mm; }
   aside, .no-print { display: none !important; }
@@ -38,4 +46,8 @@ body {
   table { font-size: 7.5pt !important; border-collapse: collapse !important; }
   th, td { padding: 2px 3px !important; }
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  /* 직원용 인쇄: 관리 전용 컬럼 숨기기 */
+  body[data-print="staff"] .print-mgr-only { display: none !important; }
+  /* 전체 인쇄: 직원용 슬림 테이블 숨기기 */
+  body:not([data-print="staff"]) .print-staff-slim { display: none !important; }
 }

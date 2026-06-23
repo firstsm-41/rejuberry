@@ -55,24 +55,6 @@ export interface LeaveEntry {
   created_at?: string
 }
 
-export interface LeaveRequest {
-  id: number
-  employee_id: string
-  requester_id: string | null
-  start_date: string
-  end_date: string
-  days: number
-  type: 'Y' | 'H'
-  reason: string | null
-  status: 'pending' | 'approved' | 'rejected'
-  rejected_reason: string | null
-  approved_by: string | null
-  note: string | null
-  created_at: string
-  updated_at: string | null
-  employees?: { name: string; dept: string; position: string } | null
-}
-
 export interface OvertimeEntry {
   id: number
   employee_id: string
@@ -126,6 +108,7 @@ type EmployeeUpdate = Partial<EmployeeInsert>
 
 type LeaveEntryInsert = Omit<LeaveEntry, 'id' | 'created_at'>
 type HrChangeInsert = Omit<HrChange, 'id' | 'created_at' | 'employees'>
+type OvertimeInsert = Omit<OvertimeEntry, 'id' | 'created_at'>
 
 export type Database = {
   public: {
@@ -164,6 +147,12 @@ export type Database = {
         Row: HrChange
         Insert: HrChangeInsert
         Update: Partial<HrChangeInsert>
+        Relationships: []
+      }
+      overtime: {
+        Row: OvertimeEntry
+        Insert: OvertimeInsert
+        Update: Partial<OvertimeInsert>
         Relationships: []
       }
       schedule_confirmed: {

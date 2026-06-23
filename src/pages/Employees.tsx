@@ -1,16 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Employee } from '../types/database'
-
-const TEAM_GROUPS = [
-  { label: '진료진', depts: ['대표원장', '부원장'],    color: '#1d4ed8' },
-  { label: '실장',   depts: ['총괄실장', '실장'],       color: '#7c3aed' },
-  { label: '코디',   depts: ['코디'],                   color: '#0369a1' },
-  { label: '간호',   depts: ['간호'],                   color: '#047857' },
-  { label: '피부1',  depts: ['피부1(시술)'],             color: '#9d174d' },
-  { label: '피부2',  depts: ['피부2(관리)'],             color: '#92400e' },
-  { label: '마케팅', depts: ['마케팅'],                  color: '#0f766e' },
-]
+import { TEAM_GROUPS } from '../constants'
 
 export default function Employees() {
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -33,7 +24,7 @@ export default function Employees() {
 
   return (
     <div className="flex flex-col h-full overflow-auto">
-      <div className="p-6 space-y-4">
+      <div className="p-4 sm:p-6 space-y-4">
         <div className="flex items-center gap-3">
           <input
             value={search}
@@ -45,7 +36,8 @@ export default function Employees() {
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[560px]">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500">이름</th>
@@ -88,6 +80,7 @@ export default function Employees() {
               })}
             </tbody>
           </table>
+          </div>
 
           {filtered.length === 0 && (
             <div className="text-center text-slate-400 py-16 text-sm">검색 결과가 없습니다</div>

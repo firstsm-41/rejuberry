@@ -4,15 +4,7 @@ import { useAuth } from '../store/useAuth'
 import type { HrChange, Employee } from '../types/database'
 
 import Modal from '../components/Modal'
-
-const DEPT_COLORS: Record<string, string> = {
-  '대표원장':'#1e40af','부원장':'#1d4ed8','총괄실장':'#6d28d9',
-  '실장':'#7c3aed','코디':'#0369a1','간호':'#047857',
-  '피부1(시술)':'#9d174d','피부2(관리)':'#92400e',
-  '마케팅':'#0f766e','미분류':'#6b7280',
-}
-const DEPTS = ['대표원장','부원장','총괄실장','실장','코디','간호','피부1(시술)','피부2(관리)','마케팅','미분류']
-const POSITIONS = ['대표원장','부원장','총괄실장','상담실장','VIP실장','코디네이터','간호팀장','간호조무사','간호사','피부1팀 팀장','피부2팀 팀장','피부관리사','마케팅팀 이사','마케팅팀 실장','마케팅팀 디자이너','청소','기타']
+import { DEPT_COLORS, DEPTS, POSITIONS } from '../constants'
 
 export default function Changes() {
   const { profile } = useAuth()
@@ -83,7 +75,7 @@ export default function Changes() {
 
   return (
     <div className="flex flex-col h-full overflow-auto">
-      <div className="p-6 space-y-4">
+      <div className="p-4 sm:p-6 space-y-4">
         {canEdit && (
           <div className="flex justify-end">
             <button onClick={() => setModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">+ 입퇴사 등록</button>
@@ -103,7 +95,8 @@ export default function Changes() {
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-          <table className="w-full border-collapse">
+          <div className="overflow-x-auto">
+          <table className="w-full border-collapse min-w-[640px]">
             <thead><tr>{['날짜','구분','사번','이름','소속','직급','메모'].map(h => (
               <th key={h} className="bg-slate-50 px-4 py-3 text-left text-xs font-bold text-slate-500 border-b border-slate-200">{h}</th>
             ))}</tr></thead>
@@ -133,6 +126,7 @@ export default function Changes() {
               })}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 

@@ -2,8 +2,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../store/useAuth'
 import type { Employee, OvertimeEntry } from '../types/database'
-
 import Modal from '../components/Modal'
+import { DEPT_COLORS } from '../constants'
 
 // 오버타임 확인 표시 그룹 (대표원장/부원장 제외, 총괄실장/실장 묶음)
 const MANAGER_OT_GROUPS = [
@@ -25,13 +25,6 @@ const fmtMin = (min: number) => {
   if (h === 0) return `${sign}${m}분`
   if (m === 0) return `${sign}${h}시간`
   return `${sign}${h}시간 ${m}분`
-}
-
-const DEPT_COLORS: Record<string, string> = {
-  '대표원장':'#1e40af','부원장':'#1d4ed8','총괄실장':'#6d28d9',
-  '실장':'#7c3aed','코디':'#0369a1','간호':'#047857',
-  '피부1(시술)':'#9d174d','피부2(관리)':'#92400e',
-  '마케팅':'#0f766e','미분류':'#6b7280',
 }
 
 export default function Overtime() {
@@ -97,7 +90,7 @@ function ManagerView({ selEmpDefault }: { selEmpDefault: string }) {
 
   return (
     <div className="flex flex-col h-full overflow-auto">
-      <div className="p-6 space-y-5">
+      <div className="p-4 sm:p-6 space-y-5">
         {/* 헤더 */}
         <div className="flex items-center gap-3">
           <button onClick={prevMonth} className="bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-sm font-semibold">◀</button>
@@ -254,7 +247,7 @@ function StaffView({ empId }: { empId: string }) {
 
   return (
     <div className="flex flex-col h-full overflow-auto">
-      <div className="p-6 space-y-5">
+      <div className="p-4 sm:p-6 space-y-5">
         {/* Balance */}
         <div className="grid grid-cols-3 gap-4">
           {[
@@ -271,9 +264,9 @@ function StaffView({ empId }: { empId: string }) {
           ))}
         </div>
 
-        <div className="grid grid-cols-5 gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
           {/* Form */}
-          <div className="col-span-2 bg-white rounded-2xl border border-slate-200 p-5">
+          <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-5">
             <div className="flex gap-1 bg-slate-100 p-1 rounded-xl mb-4">
               {(['earn', 'use'] as const).map(t => (
                 <button key={t} onClick={() => setTab(t)}
@@ -309,7 +302,7 @@ function StaffView({ empId }: { empId: string }) {
           </div>
 
           {/* History */}
-          <div className="col-span-3 bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="lg:col-span-3 bg-white rounded-2xl border border-slate-200 overflow-hidden">
             <div className="px-4 py-3 border-b border-slate-100 font-bold text-sm text-slate-700">내역</div>
             <div className="divide-y divide-slate-100 overflow-y-auto" style={{ maxHeight: 400 }}>
               {entries.length === 0 ? (

@@ -3,12 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../store/useAuth'
 import type { Employee, LeaveData, LeaveEntry } from '../types/database'
 import Modal from '../components/Modal'
-
-const DEPT_COLORS: Record<string, string> = {
-  '대표원장':'#1e40af','부원장':'#1d4ed8','총괄실장':'#6d28d9',
-  '실장':'#7c3aed','코디':'#0369a1','간호':'#047857',
-  '피부1(시술)':'#9d174d','피부2(관리)':'#92400e',
-}
+import { DEPT_COLORS } from '../constants'
 
 export default function Leave() {
   const { profile } = useAuth()
@@ -78,7 +73,7 @@ function StaffView() {
 
   return (
     <div className="flex flex-col h-full overflow-auto">
-      <div className="p-6 space-y-5">
+      <div className="p-4 sm:p-6 space-y-5">
         <div className="flex items-center justify-between">
           <span className="text-base font-bold text-slate-800">내 연차 현황</span>
           <button onClick={() => setReqModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
@@ -103,7 +98,8 @@ function StaffView() {
         {/* 연차 사용 내역 */}
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100 font-bold text-sm">{year}년 연차 내역</div>
-          <table className="w-full border-collapse">
+          <div className="overflow-x-auto">
+          <table className="w-full border-collapse min-w-[640px]">
             <thead><tr>{['신청일','시작일','종료일','일수','구분','오전/오후','관리'].map(h => (
               <th key={h} className="bg-slate-50 px-4 py-3 text-left text-xs font-bold text-slate-500 border-b border-slate-200">{h}</th>
             ))}</tr></thead>
@@ -138,6 +134,7 @@ function StaffView() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 
@@ -234,7 +231,7 @@ function ManagerView() {
 
   return (
     <div className="flex flex-col h-full overflow-auto">
-      <div className="p-6 space-y-5">
+      <div className="p-4 sm:p-6 space-y-5">
         {/* Tabs + 연차 신청 버튼 */}
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
@@ -263,7 +260,7 @@ function ManagerView() {
 
             {selEmp && selInfo ? (
               <>
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   {[
                     { label:'총 연차', val: selInfo.total,                 unit:'일', color:'text-slate-800' },
                     { label:'사용',    val: selInfo.used.toFixed(1),       unit:'일', color:'text-amber-600' },
@@ -306,7 +303,8 @@ function ManagerView() {
             ) : (
               <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
                 <div className="px-5 py-4 border-b border-slate-100 font-bold text-sm">전체 연차 현황 ({year}년)</div>
-                <table className="w-full border-collapse">
+                <div className="overflow-x-auto">
+                <table className="w-full border-collapse min-w-[680px]">
                   <thead><tr>{['이름','소속','총 연차','사용','잔여','상세보기','사용률'].map(h => (
                     <th key={h} className="bg-slate-50 px-4 py-3 text-left text-xs font-bold text-slate-500 border-b border-slate-200">{h}</th>
                   ))}</tr></thead>
@@ -358,6 +356,7 @@ function ManagerView() {
                     })}
                   </tbody>
                 </table>
+                </div>
               </div>
             )}
           </>
@@ -373,7 +372,8 @@ function ManagerView() {
                 {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}년</option>)}
               </select>
             </div>
-            <table className="w-full border-collapse">
+            <div className="overflow-x-auto">
+            <table className="w-full border-collapse min-w-[680px]">
               <thead><tr>{['등록일','직원','기간','일수','구분','오전/오후','관리'].map(h => (
                 <th key={h} className="bg-slate-50 px-4 py-3 text-left text-xs font-bold text-slate-500 border-b border-slate-200">{h}</th>
               ))}</tr></thead>
@@ -416,6 +416,7 @@ function ManagerView() {
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         )}
 
