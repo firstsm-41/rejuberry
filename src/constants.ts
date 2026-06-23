@@ -52,6 +52,11 @@ export const SCHEDULE_GROUPS: Array<{ label: string; depts: string[]; color: str
   { label: '미분류',      depts: ['미분류'],             color: '#6b7280' },
 ]
 
+// 근무표 화면·이미지에 실제로 표시할 그룹 (마케팅·미분류 제외 — 근무 파트만)
+export const SCHEDULE_VISIBLE_GROUPS = SCHEDULE_GROUPS.filter(
+  g => g.label !== '마케팅' && g.label !== '미분류'
+)
+
 // 근무 교환 가능 "파트 그룹" — 총괄실장+실장, 대표원장+부원장은 같은 파트로 묶임 (DB swap_group과 일치)
 export const swapGroupOf = (dept: string): string =>
   SCHEDULE_GROUPS.find(g => g.depts.includes(dept))?.label ?? dept

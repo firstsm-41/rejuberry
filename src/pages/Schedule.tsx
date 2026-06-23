@@ -5,7 +5,7 @@ import type { Employee, Schedule as SchRow } from '../types/database'
 import Modal from '../components/Modal'
 import * as XLSX from 'xlsx-js-style'
 import html2canvas from 'html2canvas'
-import { DEPTS, STATS_DEPTS, DEPT_COLORS, DAYS_KR, STATUS_ORDER, STATUS_CFG, SCHEDULE_GROUPS, swapGroupOf } from '../constants'
+import { DEPTS, STATS_DEPTS, DEPT_COLORS, DAYS_KR, STATUS_ORDER, STATUS_CFG, SCHEDULE_VISIBLE_GROUPS, swapGroupOf } from '../constants'
 import type { WorkStatus } from '../constants'
 
 type SchMap = Record<string, Record<number, WorkStatus>>
@@ -430,7 +430,7 @@ export default function Schedule() {
     // 공통: 세로 가운데 정렬 + 줄간격 고정 (html2canvas 글자 쏠림 방지)
     const VA = 'vertical-align:middle;line-height:1.1;'
     // 마케팅·미분류 제외 (근무 파트만)
-    const exportGroups = SCHEDULE_GROUPS.filter(g => g.label !== '마케팅' && g.label !== '미분류')
+    const exportGroups = SCHEDULE_VISIBLE_GROUPS
 
     // ── 헤더 ──
     const thFix = `border:${B};${VA}background:#ffffff;color:#64748b;font-weight:700;font-size:10px;padding:6px;text-align:left;white-space:nowrap`
@@ -826,7 +826,7 @@ export default function Schedule() {
                 </tr>
               </thead>
               <tbody>
-                {SCHEDULE_GROUPS.map(group => {
+                {SCHEDULE_VISIBLE_GROUPS.map(group => {
                   const emps = group.depts.flatMap(d => grouped[d] || []); if (!emps.length) return null
                   const col  = group.color
                   const span = (canEdit?1:0)+2+dim+(canEdit?5:0)
@@ -881,7 +881,7 @@ export default function Schedule() {
               </tbody>
               {canEdit && (
                 <tfoot>
-                  {DEPTS.filter(d => grouped[d].length > 0).map(dept => {
+                  {STATS_DEPTS.filter(d => grouped[d].length > 0).map(dept => {
                     const col=DEPT_COLORS[dept]||'#64748b'
                     return (
                       <tr key={`s-${dept}`}>
