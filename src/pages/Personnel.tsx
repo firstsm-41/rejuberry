@@ -32,7 +32,15 @@ export default function Personnel() {
   const [editError, setEditError] = useState('')
 
   const [filter, setFilter] = useState({ search: '', dept: 'all', status: 'active' })
-  const [showSalary, setShowSalary] = useState(false)
+  const [showSecret, setShowSecret] = useState(false)
+
+  // 주민번호 마스킹: 앞 7자리(생년월일+성별)만 표시
+  const maskSSN = (ssn?: string | null) => {
+    if (!ssn) return '-'
+    const p = ssn.split('-')
+    if (p.length === 2) return `${p[0]}-${(p[1][0] || '')}${'●'.repeat(Math.max(0, p[1].length - 1))}`
+    return ssn.slice(0, 8) + '●'.repeat(Math.max(0, ssn.length - 8))
+  }
 
   const load = async () => {
     const { data } = await supabase.from('employees').select('*').order('id')
@@ -109,9 +117,10 @@ export default function Personnel() {
           </select>
           <div className="ml-auto flex items-center gap-3">
             <label className="flex items-center gap-1.5 cursor-pointer select-none">
-              <input type="checkbox" checked={showSalary} onChange={e => setShowSalary(e.target.checked)}
+              <input type="checkbox" checked={showSecret} onChange={e => setShowSecret(e.target.checked)}
                 className="w-4 h-4 accent-blue-600" />
-              <span className="text-sm text-slate-600 font-medium">급여 보기</span>
+              <span className="text-sm text-slate-600 font-medium">민감정보 보기</span>
+              <span className="text-xs text-slate-400">(급여·주민번호)</span>
             </label>
             <span className="text-sm text-slate-400">{filtered.length}명</span>
             <button onClick={() => { setAddEmp({ ...EMPTY_EMP }); setAddError(''); setAddModal(true) }}
@@ -127,7 +136,7 @@ export default function Personnel() {
             <table className="w-full border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  {['사번','이름','소속','직급','전화번호','이메일','생년월일','입사일',
+                  {['사번','이름','소속','직급','전화번호','이메일','생년월일','주민번호','입사일',
                     '급여(계약)','상태','관리'
                   ].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-bold text-slate-500 whitespace-nowrap">{h}</th>
@@ -136,7 +145,7 @@ export default function Personnel() {
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={11} className="text-center text-slate-400 py-12 text-sm">직원이 없습니다</td></tr>
+                  <tr><td colSpan={12} className="text-center text-slate-400 py-12 text-sm">직원이 없습니다</td></tr>
                 ) : filtered.map(emp => {
                   const isEditing = editingId === emp.id
                   const col = DEPT_COLORS[isEditing ? (editRow.dept || emp.dept) : emp.dept] || '#64748b'
@@ -171,6 +180,10 @@ export default function Personnel() {
                         <td className="px-2 py-2">
                           <input type="date" value={editRow.birth_date||''} onChange={e=>setEF('birth_date',e.target.value)}
                             className="border border-blue-300 rounded-lg px-2 py-1.5 text-sm outline-none" />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input value={editRow.ssn||''} onChange={e=>setEF('ssn',e.target.value)} placeholder="000000-0000000"
+                            className="w-32 border border-blue-300 rounded-lg px-2 py-1.5 text-sm outline-none" />
                         </td>
                         <td className="px-2 py-2">
                           <input type="date" value={editRow.start_date||''} onChange={e=>setEF('start_date',e.target.value)}
@@ -224,9 +237,12 @@ export default function Personnel() {
                       <td className="px-4 py-3 text-sm text-slate-500">{emp.phone||'-'}</td>
                       <td className="px-4 py-3 text-sm text-slate-500">{emp.email||'-'}</td>
                       <td className="px-4 py-3 text-sm text-slate-500">{emp.birth_date||'-'}</td>
+                      <td className="px-4 py-3 text-sm text-slate-500 font-mono whitespace-nowrap">
+                        {showSecret ? (emp.ssn||'-') : maskSSN(emp.ssn)}
+                      </td>
                       <td className="px-4 py-3 text-sm text-slate-500">{emp.start_date}</td>
                       <td className="px-4 py-3 text-sm font-medium">
-                        {showSalary
+                        {showSecret
                           ? <span className="text-slate-600">{emp.salary||'-'}</span>
                           : <span className="text-slate-400 tracking-widest">{emp.salary?'●●●●●':'-'}</span>
                         }
