@@ -605,6 +605,13 @@ export default function Schedule() {
                 인쇄(직원용)
               </button>
               {canEdit && (
+                <button onClick={() => setCreateModal(true)}
+                  className="flex items-center gap-1 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 px-2.5 py-1.5 rounded-lg text-xs font-semibold">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2"/></svg>
+                  연차 반영
+                </button>
+              )}
+              {canEdit && (
                 <button onClick={() => setShowQuotaSettings(v => !v)}
                   className={`flex items-center gap-1 border px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${showQuotaSettings?'bg-indigo-100 text-indigo-700 border-indigo-300':'bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200'}`}>
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
@@ -1142,15 +1149,23 @@ function ScheduleCreateModal({ year, month, employees, onClose, onCreated }: Sch
 
   useEffect(() => {
     const pad = (n:number) => String(n).padStart(2,'0')
+    const lastDay = new Date(year, month, 0).getDate()  // 해당 월 실제 마지막 날 (30/31/28/29)
+    const dim = lastDay
     supabase.from('leave_entries').select('*')
-      .lte('start_date',`${year}-${pad(month)}-31`).gte('end_date',`${year}-${pad(month)}-01`)
-      .then(({ data }:{data:Array<{employee_id:string;start_date:string;end_date:string;type:string}>|null}) => {
+      .lte('start_date',`${year}-${pad(month)}-${pad(lastDay)}`).gte('end_date',`${year}-${pad(month)}-01`)
+      .then(({ data, error }:{data:Array<{employee_id:string;start_date:string;end_date:string;type:string}>|null; error:unknown}) => {
+        if (error) { console.error('연차 조회 실패', error); setLeaveItems([]); setLoading(false); return }
         const expanded:Array<{empId:string;day:number;type:string}>=[]
         for (const entry of (data||[])) {
-          const s=new Date(entry.start_date), e=new Date(entry.end_date)
-          for (const dt=new Date(s); dt<=e; dt.setDate(dt.getDate()+1)) {
-            if (dt.getFullYear()===year&&dt.getMonth()+1===month)
-              expanded.push({empId:entry.employee_id,day:dt.getDate(),type:entry.type})
+          // 'YYYY-MM-DD' 문자열을 직접 파싱 (타임존 영향 없이)
+          const [sy,sm,sd] = entry.start_date.split('-').map(Number)
+          const [ey,em,ed] = entry.end_date.split('-').map(Number)
+          const startNum = sy*10000 + sm*100 + sd
+          const endNum   = ey*10000 + em*100 + ed
+          for (let d = 1; d <= dim; d++) {
+            const cur = year*10000 + month*100 + d
+            if (cur >= startNum && cur <= endNum)
+              expanded.push({empId:entry.employee_id,day:d,type:entry.type})
           }
         }
         setLeaveItems(expanded); setLoading(false)
@@ -1177,10 +1192,10 @@ function ScheduleCreateModal({ year, month, employees, onClose, onCreated }: Sch
   }
 
   return (
-    <Modal open={true} onClose={onClose} title={`${year}년 ${month}월 근무표 생성`}>
+    <Modal open={true} onClose={onClose} title={`${year}년 ${month}월 연차 반영`}>
       <div className="space-y-4">
         <div className="bg-blue-50 rounded-xl p-3 text-sm text-blue-700">
-          승인된 연차/반차가 스케줄에 반영됩니다. 생성 후 나머지 근무를 직접 입력하세요.
+          신청된 연차/반차를 근무표에 연차(Y)·반차(H)로 반영합니다(참고용). 기존 근무는 지우지 않으며, 반영 후 확정 단계에서 자유롭게 수정할 수 있습니다.
         </div>
         {loading ? (
           <div className="text-center py-8 text-slate-400 text-sm">불러오는 중...</div>
@@ -1212,9 +1227,9 @@ function ScheduleCreateModal({ year, month, employees, onClose, onCreated }: Sch
         )}
         <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
           <button onClick={onClose} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-semibold">취소</button>
-          <button onClick={handleCreate} disabled={creating||loading}
+          <button onClick={handleCreate} disabled={creating||loading||leaveItems.length===0}
             className="bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-bold">
-            {creating?'생성 중...':'근무표 생성하기'}
+            {creating?'반영 중...':'근무표에 반영'}
           </button>
         </div>
       </div>
