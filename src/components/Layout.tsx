@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../store/useAuth'
+import BrandLogo from './BrandLogo'
 
 const ICON = {
   dashboard: 'M3 3h7v7H3zm11 0h7v7h-7zM3 14h7v7H3zm11 0h7v7h-7z',
@@ -57,12 +58,10 @@ export default function Layout() {
       {/* Brand */}
       <div className="px-4 py-5 border-b border-slate-700/60">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-400 to-blue-700 flex items-center justify-center text-white font-bold text-sm shadow-lg">
-            리
-          </div>
-          <div>
-            <div className="text-white text-sm font-bold">리쥬베리의원</div>
-            <div className="text-slate-400 text-xs mt-0.5">인사관리 시스템</div>
+          <BrandLogo size={36} />
+          <div className="min-w-0">
+            <div className="text-white text-sm font-bold leading-tight">리쥬베리</div>
+            <div className="text-slate-400 text-xs mt-0.5">워크스페이스</div>
           </div>
         </div>
       </div>
@@ -141,8 +140,8 @@ export default function Layout() {
             </svg>
           </button>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-400 to-blue-700 flex items-center justify-center text-white font-bold text-xs">리</div>
-            <span className="text-white text-sm font-bold">리쥬베리의원</span>
+            <BrandLogo size={28} rounded="rounded-lg" />
+            <span className="text-white text-sm font-bold">리쥬베리 워크스페이스</span>
           </div>
         </header>
 

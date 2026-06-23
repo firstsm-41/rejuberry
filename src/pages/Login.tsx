@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import BrandLogo from '../components/BrandLogo'
 
 type Tab = 'login' | 'register'
 type RegStep = 'verify' | 'setup'
@@ -133,11 +134,11 @@ export default function Login() {
 
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-400 to-blue-700 flex items-center justify-center text-white font-bold text-2xl shadow-xl mx-auto mb-4">
-            리
+          <div className="mx-auto mb-4 w-fit">
+            <BrandLogo size={64} rounded="rounded-2xl" />
           </div>
-          <h1 className="text-white text-xl font-bold">리쥬베리의원</h1>
-          <p className="text-slate-400 text-sm mt-1">인사관리 시스템</p>
+          <h1 className="text-white text-xl font-bold">리쥬베리 워크스페이스</h1>
+          <p className="text-slate-400 text-sm mt-1">리쥬베리의원</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
