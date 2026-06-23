@@ -136,8 +136,8 @@ export default function Personnel() {
             <table className="w-full border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  {['사번','이름','소속','직급','전화번호','이메일','생년월일','주민번호','입사일',
-                    '급여(계약)','상태','관리'
+                  {['사번','이름','소속','직급','전화번호','이메일','생년월일','주민번호','입사일','퇴사일',
+                    '급여(계약)','이전 직장','비고','상태','관리'
                   ].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-bold text-slate-500 whitespace-nowrap">{h}</th>
                   ))}
@@ -145,7 +145,7 @@ export default function Personnel() {
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={12} className="text-center text-slate-400 py-12 text-sm">직원이 없습니다</td></tr>
+                  <tr><td colSpan={15} className="text-center text-slate-400 py-12 text-sm">직원이 없습니다</td></tr>
                 ) : filtered.map(emp => {
                   const isEditing = editingId === emp.id
                   const col = DEPT_COLORS[isEditing ? (editRow.dept || emp.dept) : emp.dept] || '#64748b'
@@ -190,7 +190,19 @@ export default function Personnel() {
                             className="border border-blue-300 rounded-lg px-2 py-1.5 text-sm outline-none" />
                         </td>
                         <td className="px-2 py-2">
+                          <input type="date" value={editRow.end_date||''} onChange={e=>setEF('end_date',e.target.value)}
+                            className="border border-blue-300 rounded-lg px-2 py-1.5 text-sm outline-none" />
+                        </td>
+                        <td className="px-2 py-2">
                           <input value={editRow.salary||''} onChange={e=>setEF('salary',e.target.value)}
+                            className="w-24 border border-blue-300 rounded-lg px-2 py-1.5 text-sm outline-none" />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input value={editRow.prev_company||''} onChange={e=>setEF('prev_company',e.target.value)}
+                            className="w-28 border border-blue-300 rounded-lg px-2 py-1.5 text-sm outline-none" />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input value={editRow.note||''} onChange={e=>setEF('note',e.target.value)}
                             className="w-24 border border-blue-300 rounded-lg px-2 py-1.5 text-sm outline-none" />
                         </td>
                         <td className="px-2 py-2">
@@ -240,13 +252,16 @@ export default function Personnel() {
                       <td className="px-4 py-3 text-sm text-slate-500 font-mono whitespace-nowrap">
                         {showSecret ? (emp.ssn||'-') : maskSSN(emp.ssn)}
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-500">{emp.start_date}</td>
+                      <td className="px-4 py-3 text-sm text-slate-500 whitespace-nowrap">{emp.start_date}</td>
+                      <td className="px-4 py-3 text-sm text-slate-500 whitespace-nowrap">{emp.end_date||'-'}</td>
                       <td className="px-4 py-3 text-sm font-medium">
                         {showSecret
                           ? <span className="text-slate-600">{emp.salary||'-'}</span>
                           : <span className="text-slate-400 tracking-widest">{emp.salary?'●●●●●':'-'}</span>
                         }
                       </td>
+                      <td className="px-4 py-3 text-sm text-slate-500 whitespace-nowrap">{emp.prev_company||'-'}</td>
+                      <td className="px-4 py-3 text-sm text-slate-500 whitespace-nowrap">{emp.note||'-'}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${emp.status==='active'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}>
                           {emp.status==='active'?'재직':'퇴사'}
